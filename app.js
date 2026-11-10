@@ -116,7 +116,6 @@
 
   const applyCamera = () => {
     engine.setCamera(camera.x, camera.y, camera.scale);
-    scheduleShortcutLayout();
   };
 
   const targetForRect = (rect) => ({
@@ -486,65 +485,11 @@
     shortcutsEl.replaceChildren(...items);
     shortcutsEl.hidden = false;
     shortcutsEl.classList.toggle('is-editing', shortcutsEditing);
-    scheduleShortcutLayout();
   };
 
   const toggleShortcutEditing = () => {
     shortcutsEditing = !shortcutsEditing;
     renderShortcuts();
-  };
-
-  /* -- ring layout: shortcuts orbit the expanded photo -- */
-
-  let shortcutLayoutFrame = 0;
-
-  const scheduleShortcutLayout = () => {
-    if (shortcutLayoutFrame) return;
-    shortcutLayoutFrame = requestAnimationFrame(() => {
-      shortcutLayoutFrame = 0;
-      layoutShortcuts();
-    });
-  };
-
-  const layoutShortcuts = () => {
-    if (!shortcutsEl) return;
-    const rowMode = window.innerWidth < 700;
-    shortcutsEl.classList.toggle('is-row', rowMode);
-
-    const items = [...shortcutsEl.children];
-    if (rowMode) {
-      items.forEach((el) => {
-        el.style.left = '';
-        el.style.top = '';
-      });
-      return;
-    }
-    if (!items.length) return;
-
-    const rect = engine.activeRect ? engine.activeRect() : null;
-    let cx = window.innerWidth / 2;
-    let cy = window.innerHeight / 2;
-    let width = 340;
-    let height = 300;
-
-    if (rect) {
-      const scale = camera.scale;
-      cx = (rect.x + rect.w / 2) * scale + camera.x;
-      cy = (rect.y + rect.h / 2) * scale + camera.y;
-      width = rect.w * scale;
-      height = rect.h * scale;
-    }
-
-    const count = items.length;
-    const rx = Math.min(width / 2 + 66, window.innerWidth / 2 - 40);
-    const ry = Math.min(height / 2 + 58, window.innerHeight / 2 - 40);
-    const start = -Math.PI / 2;
-
-    items.forEach((el, index) => {
-      const angle = start + (index * Math.PI * 2) / count;
-      el.style.left = `${(cx + rx * Math.cos(angle)).toFixed(1)}px`;
-      el.style.top = `${(cy + ry * Math.sin(angle)).toFixed(1)}px`;
-    });
   };
 
   const openShortcutDialog = (index) => {
@@ -847,7 +792,7 @@
 
     root.style.setProperty('--bg-blur', `${settings.blur}px`);
     root.style.setProperty('--dim', String(settings.dim / 100));
-    root.style.setProperty('--grain-opacity', settings.grain ? '0.06' : '0');
+    root.style.setProperty('--grain-opacity', settings.grain ? '0.22' : '0');
 
     for (const id of Object.keys(RANGES)) {
       const input = $(id);

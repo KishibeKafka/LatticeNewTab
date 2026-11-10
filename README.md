@@ -26,7 +26,7 @@ expansion that re-gears only the block you clicked. English / 中文.
 | 9 | Glow / inner stroke, smart framing | ✅ |
 | 10 | Shortcut row from most-visited sites | ✅ |
 | 11 | White wall background and shortcut editing | ✅ |
-| 12 | Shortcut ring, drag reorder, custom icons | ✅ |
+| 12 | Shortcut row, drag reorder, custom icons | ✅ |
 
 ## Features
 
@@ -50,15 +50,14 @@ expansion that re-gears only the block you clicked. English / 中文.
   and a focus point (`object-position`). The focus point comes from the
   browser's `FaceDetector` when available and falls back to centre; the
   mechanism mirrors folia's `cardArtwork` / avatar-focus idea.
-- **Shortcut ring** — shortcuts orbit the expanded photo, following it as the
-  camera pans. Each is a white favicon tile with its name underneath; they come
+- **Shortcut row** — a familiar row of shortcuts sits at the bottom of the
+  page: the favicon on a white tile with the site name underneath. Entries come
   from Chrome's most-visited sites (`topSites`) and fall back to a built-in list
   (Gmail, YouTube, GitHub, Notion, Wikipedia, …). Clicking one opens the site.
-- **Editable shortcuts** — the pencil on the ring enters edit mode: add, rename,
-  re-point or delete shortcuts, pick a **custom icon** (resized to 64 px and
-  stored with the shortcut), and drag tiles around the ring to reorder them.
-  The list is stored in `chrome.storage.local`; on narrow screens the ring
-  folds into a compact bottom row.
+- **Editable shortcuts** — the pencil at the end of the row enters edit mode:
+  add, rename, re-point or delete shortcuts, pick a **custom icon** (resized to
+  64 px and stored with the shortcut), and drag tiles to reorder them. The list
+  is stored in `chrome.storage.local`.
 - **Light wall** — the backing of the wall (and the placeholder of cards while
   photos decode) is a soft white (`#f1f3f4`), so loading and empty edges read
   bright rather than black.

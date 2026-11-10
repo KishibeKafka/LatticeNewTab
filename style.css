@@ -227,10 +227,10 @@ body.is-panning .tile {
 .atmosphere__grain {
   position: absolute;
   inset: -50%;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 160px 160px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
   opacity: var(--grain-opacity);
-  mix-blend-mode: soft-light;
+  mix-blend-mode: normal;
   transition: opacity 0.3s linear;
 }
 
@@ -240,42 +240,40 @@ body.is-panning .tile {
   background: radial-gradient(130% 110% at 50% 45%, transparent 60%, rgba(32, 33, 36, 0.1) 100%);
 }
 
-/* ── Shortcuts (ring around the expanded photo) ────────────────────────── */
+/* ── Shortcuts row ─────────────────────────────────────────────────────── */
 
 .shortcuts {
   position: fixed;
-  inset: 0;
-  z-index: 35;
-  pointer-events: none;
-  transition: opacity 0.25s var(--ease-standard);
+  left: 50%;
+  bottom: clamp(16px, 4vh, 34px);
+  z-index: 15;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: clamp(8px, 1.2vw, 18px);
+  width: min(1080px, calc(100vw - 36px));
+  transform: translateX(-50%);
+  pointer-events: auto;
 }
 
 .shortcuts[hidden] {
   display: none;
 }
 
-body.is-drawer-open .shortcuts {
-  opacity: 0;
-  pointer-events: none;
-}
-
 .shortcut-wrap {
-  position: absolute;
-  left: 0;
-  top: 0;
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 76px;
-  transform: translate(-50%, -25px);
-  pointer-events: auto;
+  width: 72px;
 }
 
 .shortcut {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   width: 100%;
   color: var(--ink-2);
 }
@@ -378,28 +376,6 @@ body.is-drawer-open .shortcuts {
   box-shadow:
     0 0 0 2px var(--blue),
     0 8px 22px rgba(26, 115, 232, 0.35);
-}
-
-/* narrow screens: fall back to the familiar bottom row */
-.shortcuts.is-row {
-  inset: auto;
-  left: 50%;
-  bottom: clamp(16px, 4vh, 34px);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: center;
-  gap: clamp(8px, 1.2vw, 18px);
-  width: min(1080px, calc(100vw - 36px));
-  transform: translateX(-50%);
-}
-
-.shortcuts.is-row .shortcut-wrap {
-  position: relative;
-  left: auto;
-  top: auto;
-  transform: none;
-  width: 72px;
 }
 
 .shortcut__remove {
@@ -1272,27 +1248,27 @@ body.is-drawer-open .drawer {
 
 /* compact shortcut row on narrow screens */
 @media (max-width: 699px) {
-  .shortcuts.is-row {
+  .shortcuts {
     gap: 6px;
     bottom: 12px;
     width: calc(100vw - 24px);
   }
 
-  .shortcuts.is-row .shortcut-wrap {
+  .shortcut-wrap {
     width: 54px;
   }
 
-  .shortcuts.is-row .shortcut {
+  .shortcut {
     gap: 5px;
   }
 
-  .shortcuts.is-row .shortcut__tile {
+  .shortcut__tile {
     width: 38px;
     height: 38px;
     border-radius: 10px;
   }
 
-  .shortcuts.is-row .shortcut__label {
+  .shortcut__label {
     font-size: 10px;
   }
 }
