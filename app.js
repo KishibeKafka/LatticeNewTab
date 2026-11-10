@@ -20,7 +20,6 @@
     dim: 0,
     blur: 0,
     theme: 'auto',
-    engine: 'google',
     source: 'curated',
     collection: 'classic',
     language: 'auto',
@@ -598,15 +597,6 @@
   const searchEl = $('center-search');
   const searchFormEl = $('center-search-form');
   const searchInputEl = $('center-search-input');
-  const engineSelectEl = $('center-engine');
-  const engineLabelEl = $('center-engine-label');
-
-  const ENGINES = {
-    google: { label: 'Google', url: 'https://www.google.com/search?q=' },
-    bing: { label: 'Bing', url: 'https://www.bing.com/search?q=' },
-    duckduckgo: { label: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=' },
-  };
-
   let searchFrame = 0;
 
   const scheduleCenterSearch = () => {
@@ -631,16 +621,42 @@
     const cardTop = rect.y * scale + camera.y;
     const cardW = rect.w * scale;
     const cardH = rect.h * scale;
+    const cardRight = cardLeft + cardW;
+    const cardBottom = cardTop + cardH;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
 
-    const narrow = window.innerWidth < 700;
-    const barH = narrow ? 46 : 54;
-    const maxW = narrow ? cardW - 20 : cardW - 36;
-    const barW = Math.max(200, Math.min(maxW, 560));
+    // keep the field floating next to the photo, never over it
+    const cx = cardLeft + cardW / 2;
+    const cy = cardTop + cardH / 2;
+    if (cx < 0 || cx > vw || cy < 0 || cy > vh) {
+      searchEl.classList.remove('is-visible');
+      searchEl.setAttribute('aria-hidden', 'true');
+      return;
+    }
+
+    const narrow = vw < 700;
+    const barH = narrow ? 44 : 48;
+    const barW = Math.min(584, vw - 32);
+    const gap = narrow ? 12 : 16;
+    const margin = 12;
+
+    let top;
+    if (cardTop >= barH + gap + margin) {
+      top = cardTop - gap - barH;
+    } else if (vh - cardBottom >= barH + gap + margin) {
+      top = cardBottom + gap;
+    } else {
+      top = Math.max(margin, Math.min(vh - barH - margin, cardTop - gap - barH));
+    }
+
+    let left = cx - barW / 2;
+    left = Math.max(16, Math.min(vw - barW - 16, left));
 
     searchEl.style.width = `${Math.round(barW)}px`;
     searchEl.style.height = `${barH}px`;
-    searchEl.style.left = `${Math.round(cardLeft + cardW / 2 - barW / 2)}px`;
-    searchEl.style.top = `${Math.round(cardTop + cardH / 2 - barH / 2)}px`;
+    searchEl.style.left = `${Math.round(left)}px`;
+    searchEl.style.top = `${Math.round(top)}px`;
     searchEl.classList.add('is-visible');
     searchEl.removeAttribute('aria-hidden');
   };
@@ -663,8 +679,7 @@
       window.location.href = `https://${value}`;
       return;
     }
-    const engine = ENGINES[settings.engine] || ENGINES.google;
-    window.location.href = engine.url + encodeURIComponent(value);
+    window.location.href = `https://www.google.com/search?q=${encodeURIComponent(value)}`;
   };
 
   searchFormEl?.addEventListener('submit', (event) => {
@@ -672,13 +687,8 @@
     submitSearch(searchInputEl?.value);
   });
 
-  searchFormEl?.addEventListener('click', (event) => {
-    if (event.target.closest('.center-search__engine')) return;
+  searchFormEl?.addEventListener('click', () => {
     searchInputEl?.focus();
-  });
-
-  engineSelectEl?.addEventListener('change', () => {
-    applySettings({ engine: engineSelectEl.value });
   });
 
   /* ------------------------------- wall ---------------------------------- */
@@ -920,11 +930,8 @@
     syncSeg('theme-seg', settings.theme);
     applyTheme();
 
-    const engineMeta = ENGINES[settings.engine] || ENGINES.google;
-    if (engineSelectEl) engineSelectEl.value = settings.engine;
-    if (engineLabelEl) engineLabelEl.textContent = engineMeta.label;
     if (searchInputEl) {
-      searchInputEl.placeholder = t('search.placeholder', { engine: engineMeta.label });
+      searchInputEl.placeholder = t('search.placeholder', { engine: 'Google' });
       searchInputEl.setAttribute('aria-label', t('search.inputAria'));
     }
 
@@ -1207,8 +1214,6 @@
         if (['auto', 'en', 'zh'].includes(value)) clean[key] = value;
       } else if (key === 'theme') {
         if (['auto', 'light', 'dark'].includes(value)) clean[key] = value;
-      } else if (key === 'engine') {
-        if (ENGINES[value]) clean[key] = value;
       }
     }
     return clean;
@@ -1234,7 +1239,7 @@
       refreshLibraryUI();
       renderShortcuts();
       applyCamera();
-        renderWall();
+      renderWall();
     } catch (err) {
       console.error('[lattice] boot failed', err);
       notify(t('toast.bootFailed'));

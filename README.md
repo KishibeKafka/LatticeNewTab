@@ -30,7 +30,7 @@ expansion that re-gears only the block you clicked. English / 中文.
 | 11 | White wall background and shortcut editing | ✅ |
 | 12 | Shortcut row, drag reorder, custom icons | ✅ |
 | 13 | Auto / Light / Dark appearance | ✅ |
-| 14 | Search over the centre photo | ✅ |
+| 14 | Chrome-style search beside the centre photo | ✅ |
 
 ## Features
 
@@ -50,10 +50,11 @@ expansion that re-gears only the block you clicked. English / 中文.
   gap / `Esc`) collapses it.
 - **Camera glide** — the camera pans to the expanded card; the expanded card
   gets an inset focus ring and an inner peach glow.
-- **Search over the photo** — a frosted search pill sits in the middle of the
-  expanded photo and follows it as the card moves. Type a query and press Enter,
-  paste a URL to open it, or switch the chip between Google, Bing and
-  DuckDuckGo. `/` focuses the field; the chip's engine is remembered.
+- **Chrome-style search** — a rounded white (or dark in night mode) search pill
+  with a magnifier, sized like Chrome's new-tab field (584 × 48). It floats just
+  above the expanded photo — or below it when there is more room there — and
+  follows the card without ever covering it. Type a Google query or paste a URL
+  and press Enter; `/` focuses the field.
 - **Smart framing** — artwork fills the card's gear with `object-fit: cover`
   and a focus point (`object-position`). The focus point comes from the
   browser's `FaceDetector` when available and falls back to centre; the
