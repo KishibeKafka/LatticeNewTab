@@ -363,10 +363,7 @@
 
   const releaseTile = (entry) => {
     const img = entry.el.querySelector('.tile__img');
-    if (img) {
-      img.removeAttribute('data-thumb');
-      img.removeAttribute('src');
-    }
+    if (img) img.removeAttribute('src');
     entry.el.remove();
   };
 
@@ -399,7 +396,6 @@
     img.decoding = 'async';
     img.draggable = false;
     img.loading = 'lazy';
-    img.dataset.thumb = image.src;
     img.src = image.src;
     const point = state.focusPoints.get(photoIndex) || { x: 50, y: 50 };
     img.style.objectPosition = `${point.x}% ${point.y}%`;
@@ -407,14 +403,7 @@
       el.classList.remove('is-failed');
       img.classList.add('is-loaded');
     });
-    img.addEventListener('error', () => {
-      const thumb = img.dataset.thumb;
-      if (thumb && img.getAttribute('src') !== thumb) {
-        img.src = thumb;
-        return;
-      }
-      el.classList.add('is-failed');
-    });
+    img.addEventListener('error', () => el.classList.add('is-failed'));
 
     el.setAttribute('aria-label', image.aria || image.label || '');
 
@@ -443,9 +432,10 @@
     el.setAttribute('aria-label', image.aria || image.label || '');
 
     const img = el.querySelector('.tile__img');
-    const desired = isExpanded && image.full ? image.full : image.src;
-    img.loading = isExpanded ? 'eager' : 'lazy';
-    if (img.getAttribute('src') !== desired) img.src = desired;
+    if (img.getAttribute('src') !== image.src) {
+      img.classList.remove('is-loaded');
+      img.src = image.src;
+    }
     const point = state.focusPoints.get(photoIndex) || { x: 50, y: 50 };
     img.style.objectPosition = `${point.x}% ${point.y}%`;
     img.style.objectFit = isExpanded ? 'contain' : 'cover';

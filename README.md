@@ -22,9 +22,8 @@ expansion that re-gears only the block you clicked. English / 中文.
   Baidu. The placeholder and Enter searches follow the choice.
 - The extension icon now uses Chrome's default new-tab logo at 16/32/48/128,
   drawn by the zero-dependency `tools/make-icons.mjs`.
-- Uploaded and curated wall tiles now load 320 px thumbnails; the full image is
-  decoded only for the expanded card, and culled tiles drop their image sources
-  again. Linked URL images still use their own source.
+- Wall images use their original sources again — no thumbnails in the collage.
+  Culled tiles still drop their image source so long pans stay lighter.
 
 ## Status
 
@@ -46,7 +45,7 @@ expansion that re-gears only the block you clicked. English / 中文.
 | 14 | Chrome-style search beside the centre photo | ✅ |
 | 15 | Search engine picker (Google · Bing · DuckDuckGo · Baidu) | ✅ |
 | 16 | Chrome-default tab mark | ✅ |
-| 17 | 320 px thumbs for uploads/curated, full only when expanded | ✅ |
+| 17 | Culled tiles release image sources | ✅ |
 
 ## Features
 
@@ -76,11 +75,9 @@ expansion that re-gears only the block you clicked. English / 中文.
 - **Native tab mark** — the tab and toolbar use Chrome's default new-tab logo
   (red / yellow / green ring, white ring, blue centre) at all four icon sizes,
   so the page looks built in.
-- **Small thumbs, full lightbox** — uploaded and curated wall tiles load a
-  320 px thumbnail; the full-resolution image is decoded only for the expanded
-  card, then swapped back to the thumbnail when it collapses. Linked URL photos
-  use their own source. Culled tiles release their image source, so long pans
-  do not accumulate decoded photos.
+- **Culling frees images** — cards leaving the viewport release their image
+  source, so long pans do not keep every visited bitmap alive. The expanded
+  card uses the full-resolution image.
 - **Smart framing** — artwork fills the card's gear with `object-fit: cover`
   and a focus point (`object-position`). The focus point comes from the
   browser's `FaceDetector` when available and falls back to centre; the
@@ -167,10 +164,9 @@ library.js               IndexedDB library, upload pipeline, curated sets
 shortcuts.js             most-visited sites + built-in shortcut fallbacks
 collage.js               block templates, culling, block reflow, camera
 app.js                   camera input, expansion, drawer, sources, persistence
-assets/defaults/         24 bundled photos + 320 px wall thumbnails
+assets/defaults/         24 bundled photos (instant, offline)
 icons/                   Chrome-mark PNG icons (16/32/48/128)
 tools/make-icons.mjs     zero-dependency icon generator
-tools/make-thumbs.py     regenerates the bundled 320 px thumbnails (Pillow)
 tools/fetch-defaults.mjs refreshes assets/defaults from Lorem Picsum
 ```
 
@@ -182,7 +178,7 @@ tools/fetch-defaults.mjs refreshes assets/defaults from Lorem Picsum
 | Settings | `chrome.storage.local` → `lattice:settings` | clamped + validated on load |
 | Library metadata | `chrome.storage.local` → `lattice:library` | id, kind, dimensions, name |
 | Local photo blobs | IndexedDB `lattice-photos/photos` | WebP, max 1800 px, quality 0.82 |
-| Local thumbnails | IndexedDB (same record) | 320 px WebP for wall tiles and the drawer |
+| Local thumbnails | IndexedDB (same record) | 320 px WebP for the settings drawer |
 
 Uploads are never sent anywhere. Network sets and pasted URLs are fetched by
 the browser straight from their host.

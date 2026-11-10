@@ -32,26 +32,14 @@
   const buildSet = (ids, sizes, query = '') =>
     ids.map((id, i) => {
       const [w, h] = sizes[i % sizes.length];
-      const scale = Math.min(1, THUMB_EDGE / Math.max(w, h));
-      const tw = Math.max(1, Math.round(w * scale));
-      const th = Math.max(1, Math.round(h * scale));
       return {
-        src: `https://picsum.photos/id/${id}/${tw}/${th}${query}`,
-        full: `https://picsum.photos/id/${id}/${w}/${h}${query}`,
+        src: `https://picsum.photos/id/${id}/${w}/${h}${query}`,
         w,
         h,
       };
     });
 
-  const localItem = (file, w, h) => {
-    const stem = file.replace(/\.[^.]+$/, '');
-    return {
-      src: `assets/defaults/thumbs/${stem}.webp`,
-      full: `assets/defaults/${file}`,
-      w,
-      h,
-    };
-  };
+  const localItem = (file, w, h) => ({ src: `assets/defaults/${file}`, w, h });
 
   const CURATED = {
     classic: {
@@ -451,28 +439,10 @@
   const pool = () =>
     items
       .map((item) => {
-        if (isLocal(item)) {
-          const src = objectUrl(item.id, 'thumb', thumbUrls);
-          const full = objectUrl(item.id, 'blob', fullUrls);
-          return src
-            ? {
-                src,
-                full: full || src,
-                w: item.w || 1200,
-                h: item.h || 900,
-                name: item.name,
-              }
-            : null;
-        }
-        return item.url
-          ? {
-              src: item.url,
-              full: item.url,
-              w: item.w || 1200,
-              h: item.h || 900,
-              name: item.name,
-            }
-          : null;
+        const src = isLocal(item)
+          ? objectUrl(item.id, 'blob', fullUrls)
+          : item.url;
+        return src ? { src, w: item.w || 1200, h: item.h || 900, name: item.name } : null;
       })
       .filter(Boolean);
 
