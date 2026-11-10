@@ -34,11 +34,13 @@ expansion that re-gears only the block you clicked. English / 中文.
 - **Endless and virtualised** — blocks repeat over an unbounded world; only
   blocks inside the viewport plus an overscan are instantiated, capped at 400
   tiles. Dragging changes the camera offset, not the layout.
-- **Expand to 6×6** — clicking a card expands it to folia's 6×6 gear. The other
-  eleven cards of **that same block** re-gear to cover the remaining area
-  exactly (no gaps, no overlaps); no other block moves. Clicking another card
-  switches the expansion, clicking the open card (or a gap / `Esc`) collapses
-  it.
+- **Expand at the photo's own aspect** — clicking a card expands it to a large
+  card sized from the photo's real aspect ratio, so the whole image is shown
+  (`object-fit: contain`, no crop). The other eleven cards of **that same
+  block** re-gear around it and keep the block exactly covered; no other block
+  moves. The card is capped to the viewport at the current camera scale.
+  Clicking another card switches the expansion, clicking the open card (or a
+  gap / `Esc`) collapses it.
 - **Camera glide** — the camera pans to the expanded card; the expanded card
   gets a white focus ring, an inner peach glow and a title band at its lower
   edge.
@@ -74,8 +76,9 @@ expansion that re-gears only the block you clicked. English / 中文.
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-Clicking any card makes it a 6×6 card and re-tiles the rest of the block around
-it; the expanded card is centred by the camera.
+Clicking any card expands it at the photo's own aspect ratio; the rest of the
+block re-tiles around it and the camera centres it. The cards touch, so the
+wall reads as one seamless mosaic.
 
 ## Install (unpacked)
 

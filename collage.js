@@ -36,10 +36,11 @@
   const COLS = 12;
   const ROWS = 8;
   const CELL = 128;
-  const GAP = 8;
+  const GAP = 0;
   const PITCH = CELL + GAP;
   const SLOTS = 12;
-  const EXPAND = 6;
+  const EXPAND_MAX_W = 10;
+  const EXPAND_MAX_H = 7;
 
   const BLOCK_W = COLS * PITCH;
   const BLOCK_H = ROWS * PITCH;
@@ -150,25 +151,13 @@
 
     const alongX = rect.cols >= rect.rows;
     const along = alongX ? rect.cols : rect.rows;
-    const across = alongX ? rect.rows : rect.cols;
-    if (along < 2 || rect.cols * rect.rows < count) {
+    if (along < 0.8) {
       out.push(rect);
       return;
     }
 
-    let wanted = Math.round(count * (0.38 + rng() * 0.24));
-    wanted = clamp(wanted, 1, count - 1);
-
-    // a cut at `at` gives the first part `at * across` cells; both sides must
-    // hold their share of the cards
-    const minCut = Math.max(1, Math.ceil(wanted / across));
-    const maxCut = Math.min(along - 1, along - Math.ceil((count - wanted) / across));
-    if (minCut > maxCut) {
-      out.push(rect);
-      return;
-    }
-    const target = Math.round((along * wanted) / count);
-    const cut = clamp(target, minCut, maxCut);
+    const cut = clamp(along * (0.36 + rng() * 0.28), 0.4, along - 0.4);
+    const wanted = clamp(Math.round((count * cut) / along), 1, count - 1);
 
     const first = alongX
       ? { x: rect.x, y: rect.y, cols: cut, rows: rect.rows }
@@ -177,27 +166,46 @@
       ? { x: rect.x + cut, y: rect.y, cols: rect.cols - cut, rows: rect.rows }
       : { x: rect.x, y: rect.y + cut, cols: rect.cols, rows: rect.rows - cut };
 
-    const firstCount = clamp(wanted, 1, count - 1);
-    splitRect(first, firstCount, rng, out);
-    splitRect(second, count - firstCount, rng, out);
+    splitRect(first, wanted, rng, out);
+    splitRect(second, count - wanted, rng, out);
   };
 
-  const buildReflow = (orientation, slotIndex) => {
+  const buildReflow = (orientation, slotIndex, aspect) => {
     const template = ORIENTED[orientation];
     const slot = template[slotIndex];
     if (!slot) return null;
 
-    const rng = mulberry32(hash(orientation, slotIndex, 31, 17));
+    const ratio = clamp(aspect, 0.3, 3.4);
+    const rng = mulberry32(hash(orientation, slotIndex, 31, Math.round(ratio * 1000)));
 
-    const winX = clamp(Math.round(slot.x + slot.cols / 2 - EXPAND / 2), 0, COLS - EXPAND);
-    const winY = clamp(Math.round(slot.y + slot.rows / 2 - EXPAND / 2), 0, ROWS - EXPAND);
+    // keep the photo's own aspect so it is shown whole, but never larger
+    // than the current viewport allows at this camera scale
+    const scale = state.cam.scale || 1;
+    const viewW = window.innerWidth / scale;
+    const viewH = window.innerHeight / scale;
+    const capW = Math.min(EXPAND_MAX_W, (viewW * 0.9) / PITCH);
+    const capH = Math.min(EXPAND_MAX_H, (viewH * 0.86) / PITCH);
+
+    let expandW = capW;
+    let expandH = expandW / ratio;
+    if (expandH > capH) {
+      expandH = capH;
+      expandW = expandH * ratio;
+    }
+    expandW = Math.min(expandW, COLS - 0.5);
+    expandH = Math.min(expandH, ROWS - 0.5);
+    if (expandW / expandH > ratio) expandW = expandH * ratio;
+    else expandH = expandW / ratio;
+
+    const winX = clamp(slot.x + slot.cols / 2 - expandW / 2, 0, COLS - expandW);
+    const winY = clamp(slot.y + slot.rows / 2 - expandH / 2, 0, ROWS - expandH);
 
     const regions = [
       { x: 0, y: 0, cols: COLS, rows: winY },
-      { x: 0, y: winY + EXPAND, cols: COLS, rows: ROWS - winY - EXPAND },
-      { x: 0, y: winY, cols: winX, rows: EXPAND },
-      { x: winX + EXPAND, y: winY, cols: COLS - winX - EXPAND, rows: EXPAND },
-    ].filter((region) => region.cols > 0 && region.rows > 0);
+      { x: 0, y: winY + expandH, cols: COLS, rows: ROWS - winY - expandH },
+      { x: 0, y: winY, cols: winX, rows: expandH },
+      { x: winX + expandW, y: winY, cols: COLS - winX - expandW, rows: expandH },
+    ].filter((region) => region.cols > 0.4 && region.rows > 0.4);
 
     const totalArea = regions.reduce((sum, r) => sum + r.cols * r.rows, 0);
     const counts = regions.map((r) => Math.max(1, Math.round((SLOTS - 1) * ((r.cols * r.rows) / totalArea))));
@@ -237,7 +245,7 @@
     }));
 
     const rects = new Array(SLOTS);
-    rects[slotIndex] = { x: winX, y: winY, cols: EXPAND, rows: EXPAND };
+    rects[slotIndex] = { x: winX, y: winY, cols: expandW, rows: expandH };
 
     while (cards.length && freeLeaves.length) {
       let bestCard = 0;
@@ -267,12 +275,18 @@
   };
 
   const reflowCache = new Map();
-  const reflowFor = (orientation, slotIndex) => {
-    const key = `${orientation}:${slotIndex}`;
+  const imageAspect = (photoIndex) => {
+    const image = state.images[photoIndex];
+    if (!image || !image.w || !image.h) return 1;
+    return image.w / image.h;
+  };
+
+  const reflowFor = (orientation, slotIndex, aspect) => {
+    const key = `${orientation}:${slotIndex}:${aspect.toFixed(3)}`;
     if (reflowCache.has(key)) return reflowCache.get(key);
     let rects = null;
     try {
-      rects = buildReflow(orientation, slotIndex);
+      rects = buildReflow(orientation, slotIndex, aspect);
     } catch (err) {
       console.warn('[lattice] reflow failed', err);
     }
@@ -360,6 +374,8 @@
     el.dataset.index = String(photoIndex);
     el.dataset.src = image.src;
     el.dataset.label = image.label || '';
+    el.dataset.w = String(image.w || '');
+    el.dataset.h = String(image.h || '');
     el.style.left = `${rect.x}px`;
     el.style.top = `${rect.y}px`;
     el.style.width = `${rect.w}px`;
@@ -406,6 +422,8 @@
     el.dataset.index = String(photoIndex);
     el.dataset.src = image.src;
     el.dataset.label = image.label || '';
+    el.dataset.w = String(image.w || '');
+    el.dataset.h = String(image.h || '');
     el.setAttribute('aria-label', image.aria || image.label || '');
 
     const img = el.querySelector('.tile__img');
@@ -415,6 +433,7 @@
     }
     const point = state.focusPoints.get(photoIndex) || { x: 50, y: 50 };
     img.style.objectPosition = `${point.x}% ${point.y}%`;
+    img.style.objectFit = isExpanded ? 'contain' : 'cover';
     el.querySelector('.tile__caption').textContent = image.label || '';
 
     el.classList.toggle('is-expanded', isExpanded);
@@ -423,11 +442,16 @@
     entry.photoIndex = photoIndex;
   };
 
+  const activeAspect = () => {
+    if (!state.active) return 1;
+    return imageAspect(photoAt(state.active.col, state.active.row, state.active.slot));
+  };
+
   const layoutForBlock = (col, row) => {
     const orientation = orientationOf(col, row, state.seed);
     const activeHere = state.active && state.active.col === col && state.active.row === row;
     if (activeHere) {
-      return reflowFor(orientation, state.active.slot);
+      return reflowFor(orientation, state.active.slot, activeAspect());
     }
     return ORIENTED[orientation];
   };
@@ -517,7 +541,7 @@
   const expandedWorldRect = () => {
     if (!state.active) return null;
     const orientation = orientationOf(state.active.col, state.active.row, state.seed);
-    const rects = reflowFor(orientation, state.active.slot);
+    const rects = reflowFor(orientation, state.active.slot, activeAspect());
     return toWorldRect(state.active.col, state.active.row, rects[state.active.slot]);
   };
 
@@ -525,6 +549,7 @@
     const images = Array.isArray(options.images) ? options.images.filter((i) => i && i.src) : [];
     state.images = images;
     state.seed = Math.round(options.seed ?? 1);
+    if (Number.isFinite(options.scale)) state.cam.scale = options.scale;
     state.focusPoints.clear();
     state.pendingFocus.clear();
 
@@ -567,6 +592,10 @@
   };
 
   const setCamera = (x, y, scale) => {
+    if (Math.abs((state.cam.scale || 1) - scale) > 0.0001) {
+      reflowCache.clear();
+      lastRange = '';
+    }
     state.cam = { x, y, scale };
     if (wall) {
       wall.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) scale(${scale.toFixed(4)})`;

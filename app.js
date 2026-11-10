@@ -268,6 +268,7 @@
     const rect = engine.render({
       images: pool.length ? decorate(pool, label) : [],
       seed: wallSeed,
+      scale: camera.scale,
     });
     if (rect) centerOnRect(rect, false);
     else applyCamera();
@@ -298,6 +299,7 @@
         y: (lastViewport.h / 2 - old.y) / old.scale,
       };
       camera.scale = ratio;
+      engine.setCamera(camera.x, camera.y, ratio);
       const rect = engine.activeRect();
       if (rect) {
         const target = targetForRect(rect);
