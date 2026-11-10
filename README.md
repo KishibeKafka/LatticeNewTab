@@ -13,6 +13,16 @@ expansion that re-gears only the block you clicked. English / 中文.
 
 ![Night mode](docs/dark.png)
 
+## Recent changes
+
+- The search field is now Chrome's 584 × 48 rounded pill, parked just above
+  the expanded photo (or below it when that side has more room), so it never
+  covers the photo.
+- Customize gained a **Search engine** picker: Google, Bing, DuckDuckGo and
+  Baidu. The placeholder and Enter searches follow the choice.
+- The extension icon now uses Chrome's default new-tab logo at 16/32/48/128,
+  drawn by the zero-dependency `tools/make-icons.mjs`.
+
 ## Status
 
 | Stage | Scope | State |
@@ -32,6 +42,7 @@ expansion that re-gears only the block you clicked. English / 中文.
 | 13 | Auto / Light / Dark appearance | ✅ |
 | 14 | Chrome-style search beside the centre photo | ✅ |
 | 15 | Search engine picker (Google · Bing · DuckDuckGo · Baidu) | ✅ |
+| 16 | Chrome-default tab mark | ✅ |
 
 ## Features
 
@@ -58,6 +69,9 @@ expansion that re-gears only the block you clicked. English / 中文.
   press Enter; `/` focuses the field. The engine is chosen in Customize —
   Google, Bing, DuckDuckGo or Baidu — and both the placeholder and Enter
   searches follow it.
+- **Native tab mark** — the tab and toolbar use Chrome's default new-tab logo
+  (red / yellow / green ring, white ring, blue centre) at all four icon sizes,
+  so the page looks built in.
 - **Smart framing** — artwork fills the card's gear with `object-fit: cover`
   and a focus point (`object-position`). The focus point comes from the
   browser's `FaceDetector` when available and falls back to centre; the
@@ -116,6 +130,9 @@ Permissions: `storage`, `unlimitedStorage`, `topSites` (most-visited
 shortcuts) and `favicon` (local favicon lookups via `/_favicon/`). Photo
 uploads never leave the device.
 
+The tab mark follows Chrome's default new-tab logo; Chrome is a trademark of
+Google LLC.
+
 ## Install (unpacked)
 
 1. Open `chrome://extensions` and enable **Developer mode**.
@@ -140,7 +157,7 @@ shortcuts.js             most-visited sites + built-in shortcut fallbacks
 collage.js               block templates, culling, block reflow, camera
 app.js                   camera input, expansion, drawer, sources, persistence
 assets/defaults/         24 bundled photos (instant, offline)
-icons/                   generated PNG icons (16/32/48/128)
+icons/                   Chrome-mark PNG icons (16/32/48/128)
 tools/make-icons.mjs     zero-dependency icon generator
 tools/fetch-defaults.mjs refreshes assets/defaults from Lorem Picsum
 ```

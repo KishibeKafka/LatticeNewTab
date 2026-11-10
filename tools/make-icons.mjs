@@ -1,5 +1,7 @@
 /**
  * Generates the extension icons (16/32/48/128 PNG) with zero dependencies.
+ * The mark is Chrome's default new-tab logo: a blue centre, white ring and
+ * red / yellow / green outer sectors.
  * Run: node tools/make-icons.mjs
  */
 import { deflateSync } from 'node:zlib';
@@ -58,121 +60,82 @@ const encodePng = (width, height, rgba) => {
 
 /* -------------------------------- Drawing -------------------------------- */
 
-const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
-const smoothstep = (a, b, v) => {
-  const t = clamp01((v - a) / (b - a));
-  return t * t * (3 - 2 * t);
-};
-const mix = (a, b, t) => a + (b - a) * t;
+const RED = [234, 67, 53];
+const YELLOW = [251, 188, 5];
+const GREEN = [52, 168, 83];
+const BLUE = [66, 133, 244];
+const WHITE = [255, 255, 255];
 
-/** Signed distance to a rounded rectangle centered at origin. */
-const sdRoundRect = (x, y, halfW, halfH, r) => {
-  const qx = Math.abs(x) - (halfW - r);
-  const qy = Math.abs(y) - (halfH - r);
-  const outside = Math.hypot(Math.max(qx, 0), Math.max(qy, 0));
-  return outside + Math.min(Math.max(qx, qy), 0) - r;
-};
-
-const ICON_BG = [
-  [0.07, 0.09, 0.20], // deep midnight
-  [0.35, 0.21, 0.60], // violet
-  [0.93, 0.43, 0.52], // warm coral
-];
-
-const TILE_COLORS = [
-  [1.0, 0.93, 0.84],
-  [0.86, 0.94, 1.0],
-  [1.0, 0.82, 0.89],
-  [0.88, 1.0, 0.94],
-];
+const OUTER = 0.48; // radius as a fraction of the icon edge
+const RING = 0.305; // outer edge of the white ring
+const CENTRE = 0.218; // blue centre
+const SAMPLES = 4; // 4x4 supersampling for crisp small sizes
 
 /**
- * The mark: a rounded-square "wall" with three tilted photo tiles.
- * Rendered analytically so it stays crisp at every size.
+ * Chrome's mark: three 120-degree outer sectors (red top, yellow lower-right,
+ * green lower-left), a white ring and a blue centre.
  */
 const renderIcon = (size) => {
   const rgba = Buffer.alloc(size * size * 4);
-  const cx = size / 2;
-  const cy = size / 2;
-  const half = size * 0.5;
-  const corner = size * 0.235;
-
-  // tiles: [x, y, w, h, rotationDeg, colorIndex]
-  const tiles = [
-    [-0.2, -0.16, 0.34, 0.44, -9, 0],
-    [0.19, -0.2, 0.3, 0.28, 7, 1],
-    [0.16, 0.18, 0.36, 0.3, -5, 2],
-  ];
+  const half = size / 2;
+  const samples = SAMPLES * SAMPLES;
 
   for (let y = 0; y < size; y += 1) {
     for (let x = 0; x < size; x += 1) {
-      const px = x + 0.5;
-      const py = y + 0.5;
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let covered = 0;
+
+      for (let sy = 0; sy < SAMPLES; sy += 1) {
+        for (let sx = 0; sx < SAMPLES; sx += 1) {
+          const px = x + (sx + 0.5) / SAMPLES;
+          const py = y + (sy + 0.5) / SAMPLES;
+          const dx = px - half;
+          const dy = py - half;
+          const dist = Math.hypot(dx, dy) / size;
+          if (dist > OUTER) continue;
+
+          let colour;
+          if (dist <= CENTRE) {
+            colour = BLUE;
+          } else if (dist <= RING) {
+            colour = WHITE;
+          } else {
+            let angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+            if (angle < 0) angle += 360;
+            if (angle >= 210 && angle < 330) colour = RED;
+            else if (angle >= 330 || angle < 90) colour = YELLOW;
+            else colour = GREEN;
+          }
+
+          r += colour[0];
+          g += colour[1];
+          b += colour[2];
+          covered += 1;
+        }
+      }
+
+      if (!covered) continue;
       const i = (y * size + x) * 4;
-
-      // --- background: rounded square with a diagonal 3-stop gradient ---
-      const d = sdRoundRect(px - cx, py - cy, half, half, corner);
-      const cover = clamp01(0.5 - d); // 1 inside, 0 outside (1px AA)
-      if (cover <= 0) continue;
-
-      const t = clamp01((px / size) * 0.55 + (py / size) * 0.45);
-      const [c0, c1, c2] = ICON_BG;
-      let r;
-      let g;
-      let b;
-      if (t < 0.5) {
-        const k = smoothstep(0, 0.5, t);
-        r = mix(c0[0], c1[0], k);
-        g = mix(c0[1], c1[1], k);
-        b = mix(c0[2], c1[2], k);
-      } else {
-        const k = smoothstep(0.5, 1, t);
-        r = mix(c1[0], c2[0], k);
-        g = mix(c1[1], c2[1], k);
-        b = mix(c1[2], c2[2], k);
-      }
-
-      // soft top-left light bloom
-      const bloom = clamp01(1 - Math.hypot((px - size * 0.22) / size, (py - size * 0.18) / size) * 1.9);
-      const l = bloom * 0.35;
-      r = mix(r, 1, l);
-      g = mix(g, 1, l * 0.92);
-      b = mix(b, 1, l * 0.86);
-
-      // --- photo tiles ---
-      for (const [tx, ty, tw, th, deg, ci] of tiles) {
-        const ox = px - (cx + tx * size);
-        const oy = py - (cy + ty * size);
-        const a = (-deg * Math.PI) / 180;
-        const rx = ox * Math.cos(a) - oy * Math.sin(a);
-        const ry = ox * Math.sin(a) + oy * Math.cos(a);
-        const td = sdRoundRect(rx, ry, (tw * size) / 2, (th * size) / 2, size * 0.055);
-        const tcover = clamp01(0.5 - td * (size > 48 ? 1 : 2.2));
-        if (tcover <= 0) continue;
-        const [tr, tg, tb] = TILE_COLORS[ci];
-        // gentle inner vertical shading for depth
-        const shade = 0.72 + 0.28 * smoothstep(0.35, -0.35, ry / (th * size));
-        r = mix(r, tr * shade, tcover * 0.94);
-        g = mix(g, tg * shade, tcover * 0.94);
-        b = mix(b, tb * shade, tcover * 0.94);
-      }
-
-      rgba[i] = Math.round(clamp01(r) * 255);
-      rgba[i + 1] = Math.round(clamp01(g) * 255);
-      rgba[i + 2] = Math.round(clamp01(b) * 255);
-      rgba[i + 3] = Math.round(cover * 255);
+      rgba[i] = Math.round(r / covered);
+      rgba[i + 1] = Math.round(g / covered);
+      rgba[i + 2] = Math.round(b / covered);
+      rgba[i + 3] = Math.round((covered / samples) * 255);
     }
   }
 
-  return encodePng(size, size, rgba);
+  return rgba;
 };
 
-/* ---------------------------------- main --------------------------------- */
+/* ---------------------------------- Main --------------------------------- */
 
-const outDir = resolve(ROOT, 'icons');
-mkdirSync(outDir, { recursive: true });
-for (const size of [16, 32, 48, 128]) {
-  const file = resolve(outDir, `icon${size}.png`);
-  writeFileSync(file, renderIcon(size));
+const SIZES = [16, 32, 48, 128];
+const dir = resolve(ROOT, 'icons');
+mkdirSync(dir, { recursive: true });
+
+for (const size of SIZES) {
+  const png = encodePng(size, size, renderIcon(size));
+  writeFileSync(resolve(dir, `icon${size}.png`), png);
   console.log(`icons/icon${size}.png`);
 }
