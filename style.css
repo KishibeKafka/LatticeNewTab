@@ -413,6 +413,9 @@ html[data-theme="dark"] .center-search__form:focus-within {
   flex-direction: column;
   align-items: center;
   width: 72px;
+  transition:
+    opacity 0.18s var(--ease-standard),
+    transform 0.18s var(--ease-standard);
 }
 
 .shortcut {
@@ -512,8 +515,25 @@ html[data-theme="dark"] .center-search__form:focus-within {
   cursor: grab;
 }
 
+.shortcuts.is-editing .shortcut-wrap[draggable="true"] {
+  cursor: grab;
+}
+
 .shortcut-wrap.is-dragging {
-  opacity: 0.45;
+  opacity: 0.35;
+  transform: scale(0.94);
+  cursor: grabbing;
+}
+
+.shortcuts.is-editing .shortcut-wrap.is-dragging,
+.shortcuts.is-editing .shortcut-wrap.is-dragging .shortcut__tile {
+  cursor: grabbing;
+}
+
+.shortcut-wrap.is-dragging .shortcut__tile {
+  box-shadow:
+    0 18px 36px rgba(60, 64, 67, 0.3),
+    0 2px 6px rgba(60, 64, 67, 0.16);
 }
 
 .shortcut-wrap.is-drop-target .shortcut__tile {

@@ -276,6 +276,14 @@
   const shortcutIconReset = $('shortcut-icon-reset');
   const SHORTCUTS_KEY = 'lattice:shortcuts';
   const MAX_SHORTCUTS = 12;
+  const SHORTCUT_DRAG_TYPE = 'application/x-lattice-shortcut';
+  const shortcutMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+  let shortcutAnimSeq = 0;
+
+  const isShortcutDrag = (event) =>
+    Array.from(event.dataTransfer?.types || []).some(
+      (type) => type === SHORTCUT_DRAG_TYPE
+    );
 
   const ICON_EDIT = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4.2L19 9.2a1.9 1.9 0 0 0 0-2.7l-1.5-1.5a1.9 1.9 0 0 0-2.7 0L4 15.8V20Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m13.9 6.6 3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>`;
   const ICON_DONE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -335,6 +343,54 @@
     await store.set(SHORTCUTS_KEY, shortcutsList);
   };
 
+  const captureShortcutRects = () => {
+    const rects = new Map();
+    shortcutsEl?.querySelectorAll('.shortcut-wrap[data-shortcut-url]').forEach((el) => {
+      rects.set(el.dataset.shortcutUrl, el.getBoundingClientRect());
+    });
+    return rects;
+  };
+
+  const animateShortcutReorder = (before) => {
+    if (!before?.size || !shortcutsEl || shortcutMotionQuery.matches) return;
+    const after = new Map();
+    shortcutsEl.querySelectorAll('.shortcut-wrap[data-shortcut-url]').forEach((el) => {
+      after.set(el.dataset.shortcutUrl, el);
+    });
+
+    const moving = [];
+    for (const [url, oldRect] of before) {
+      const el = after.get(url);
+      if (!el) continue;
+      const newRect = el.getBoundingClientRect();
+      const dx = oldRect.left - newRect.left;
+      const dy = oldRect.top - newRect.top;
+      if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
+      el.style.transition = 'none';
+      el.style.transform = `translate(${dx}px, ${dy}px)`;
+      moving.push(el);
+    }
+    if (!moving.length) return;
+
+    // commit the inverted positions, then let the browser transition home
+    void shortcutsEl.offsetWidth;
+    requestAnimationFrame(() => {
+      for (const el of moving) {
+        el.style.transition = 'transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1)';
+        el.style.transform = '';
+      }
+    });
+
+    const seq = ++shortcutAnimSeq;
+    window.setTimeout(() => {
+      if (seq !== shortcutAnimSeq) return;
+      for (const el of moving) {
+        el.style.transition = '';
+        el.style.transform = '';
+      }
+    }, 340);
+  };
+
   const openShortcut = (url) => {
     if (!url || !/^https?:\/\//i.test(url)) return;
     window.location.href = url;
@@ -356,6 +412,7 @@
   const makeShortcutButton = (site, index) => {
     const wrapper = document.createElement('div');
     wrapper.className = 'shortcut-wrap';
+    wrapper.dataset.shortcutUrl = site.url;
 
     const button = document.createElement('button');
     button.type = 'button';
@@ -374,6 +431,7 @@
     icon.className = 'shortcut__icon';
     icon.alt = '';
     icon.decoding = 'async';
+    icon.draggable = false;
     icon.src = site.icon || faviconFor(site.url);
     icon.addEventListener('error', () => icon.remove(), { once: true });
 
@@ -401,31 +459,51 @@
         draggedShortcut = index;
         suppressShortcutClick = Date.now() + 500;
         event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData(SHORTCUT_DRAG_TYPE, String(index));
         event.dataTransfer.setData('text/plain', String(index));
-        wrapper.classList.add('is-dragging');
+        requestAnimationFrame(() => {
+          if (draggedShortcut === index) wrapper.classList.add('is-dragging');
+        });
       });
       wrapper.addEventListener('dragend', () => {
         wrapper.classList.remove('is-dragging');
+        shortcutsEl?.querySelectorAll('.shortcut-wrap.is-drop-target').forEach((el) => {
+          el.classList.remove('is-drop-target');
+        });
         draggedShortcut = -1;
       });
       wrapper.addEventListener('dragover', (event) => {
-        if (draggedShortcut < 0) return;
+        if (draggedShortcut < 0 || !isShortcutDrag(event)) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = 'move';
+        shortcutsEl?.querySelectorAll('.shortcut-wrap.is-drop-target').forEach((el) => {
+          if (el !== wrapper) el.classList.remove('is-drop-target');
+        });
         wrapper.classList.add('is-drop-target');
       });
       wrapper.addEventListener('dragleave', () => wrapper.classList.remove('is-drop-target'));
-      wrapper.addEventListener('drop', async (event) => {
+      wrapper.addEventListener('drop', (event) => {
+        if (!isShortcutDrag(event)) return;
         event.preventDefault();
+        event.stopPropagation();
         wrapper.classList.remove('is-drop-target');
-        const source = Number(event.dataTransfer?.getData('text/plain'));
-        if (!Number.isInteger(source) || source === index) return;
+        const source = Number(
+          event.dataTransfer?.getData(SHORTCUT_DRAG_TYPE) ||
+            event.dataTransfer?.getData('text/plain')
+        );
+        if (!Number.isInteger(source) || source === index) {
+          draggedShortcut = -1;
+          return;
+        }
+        const before = captureShortcutRects();
         const [moved] = shortcutsList.splice(source, 1);
         const destination = source < index ? index - 1 : index;
         shortcutsList.splice(destination, 0, moved);
         suppressShortcutClick = Date.now() + 300;
-        await persistShortcuts();
+        draggedShortcut = -1;
+        void persistShortcuts();
         renderShortcuts();
+        animateShortcutReorder(before);
       });
     }
 
@@ -1058,6 +1136,7 @@
 
   ['dragenter', 'dragover'].forEach((type) => {
     dropzone?.addEventListener(type, (event) => {
+      if (isShortcutDrag(event)) return;
       event.preventDefault();
       dropzone.classList.add('is-drag');
     });
@@ -1068,15 +1147,27 @@
   });
 
   dropzone?.addEventListener('drop', (event) => {
+    if (isShortcutDrag(event)) return;
     event.preventDefault();
     event.stopPropagation();
     dropzone.classList.remove('is-drag');
     handleFiles(event.dataTransfer?.files);
   });
 
-  window.addEventListener('dragover', (event) => event.preventDefault());
+  window.addEventListener('dragover', (event) => {
+    event.preventDefault();
+    if (!isShortcutDrag(event)) return;
+    event.dataTransfer.dropEffect =
+      event.target instanceof Element && event.target.closest('.shortcuts')
+        ? 'move'
+        : 'none';
+  });
+
   window.addEventListener('drop', (event) => {
     event.preventDefault();
+    // shortcut reordering is internal; never treat its icon as a photo upload
+    if (isShortcutDrag(event)) return;
+    if (event.target instanceof Element && event.target.closest('.shortcuts')) return;
     if (!event.dataTransfer?.files?.length) return;
     if (event.target.closest('#dropzone')) return;
     setDrawer(true, 'upload');

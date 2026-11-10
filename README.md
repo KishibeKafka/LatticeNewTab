@@ -82,8 +82,10 @@ expansion that re-gears only the block you clicked. English / 中文.
   (Gmail, YouTube, GitHub, Notion, Wikipedia, …). Clicking one opens the site.
 - **Editable shortcuts** — the pencil at the end of the row enters edit mode:
   add, rename, re-point or delete shortcuts, pick a **custom icon** (resized to
-  64 px and stored with the shortcut), and drag tiles to reorder them. The list
-  is stored in `chrome.storage.local`.
+  64 px and stored with the shortcut), and drag tiles to reorder them with a
+  sliding reflow animation. Shortcut drags are kept internal, so their icons
+  are never added to the photo wall. The list is stored in
+  `chrome.storage.local`.
 - **Light wall** — the backing of the wall (and the placeholder of cards while
   photos decode) is a soft white (`#f1f3f4`), so loading and empty edges read
   bright rather than black.
