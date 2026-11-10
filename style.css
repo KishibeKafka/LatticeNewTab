@@ -122,6 +122,8 @@ svg {
   z-index: 0;
   overflow: hidden;
   background: #dde0e5;
+  cursor: grab;
+  touch-action: none;
   filter: blur(var(--bg-blur)) saturate(1.02);
   transition: filter 0.35s var(--ease-standard);
 }
@@ -146,6 +148,19 @@ svg {
 
 .tile.is-center {
   cursor: default;
+}
+
+.tile--patch {
+  z-index: 10;
+}
+
+.tile--wall {
+  z-index: 0;
+}
+
+body.is-panning .collage,
+body.is-panning .tile {
+  cursor: grabbing;
 }
 
 .tile.is-leaving {

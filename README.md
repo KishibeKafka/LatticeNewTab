@@ -1,14 +1,14 @@
 # Lattice
 
-A **photo mosaic with a permanent centre** for your new tab. The selected photo
-sits enlarged in the middle, square-cornered and edge-to-edge; the rest of the
-wall reflows around it with no gaps and no overlaps. Click another photo and it
-swaps into the centre — the old one shrinks back into the mosaic, and everything
-glides to its new place. There is no "exit": the composition always has a centre.
+A **draggable, endless photo wall** for your new tab with a spotlight in the
+middle. The wall is a gap-free square-cornered mosaic you can pan forever; one
+photo sits enlarged in the centre, and the photos around it are re-packed to
+fit. Click any photo: the wall glides so that photo reaches the centre, it
+grows, and its neighbourhood reflows around it. **English / 中文.**
 
 ![Lattice new tab](docs/screenshot.png)
 
-![Another photo selected: the composition reflows](docs/selected.png)
+![Another photo selected: the view glides and the surroundings reflow](docs/selected.png)
 
 ![Customize panel](docs/customize.png)
 
@@ -21,24 +21,28 @@ glides to its new place. There is no "exit": the composition always has a centre
 | 3 | Photo library, URL sources, curated sets | ✅ |
 | 4 | Material polish, skeletons, reduced motion | ✅ |
 | 5 | English / 中文 UI with language switch | ✅ |
-| 6 | Gap-free square-cornered mosaic | ✅ |
-| 7 | Centre spotlight composition with reflow | ✅ |
+| 6 | Gap-free square-cornered wall | ✅ |
+| 7 | Centre spotlight with local reflow | ✅ |
+| 8 | Drag + click-to-centre + reflow together | ✅ |
 
 ## Features
 
-- **Permanent centre photo** — on every new tab a random photo is picked and
-  enlarged to the middle of the screen at its natural aspect ratio (no crop).
-- **Gapless surroundings** — the remaining space is split into four regions
-  (above, below, left, right of the centre) and filled with the other photos
-  edge-to-edge, sized as a varied grid and cropped to fit. The viewport is
-  covered 100%, with zero overlaps.
-- **Click to swap** — click any surrounding photo: it grows into the centre,
-  the previous centre shrinks back into the surrounding mosaic, and every tile
-  animates to its new rectangle.
-- **Irreversible** — there is no dismiss/zoom-out state. The only way to change
-  the composition is to select another photo. Clicking the centre does nothing.
-- **Square corners, no gutters** — photos meet at right angles across the whole
-  screen.
+- **Endless draggable wall** — an infinite, virtualised masonry of columns with
+  varying widths. Photos tile edge to edge, square corners, no gaps, no
+  overlaps. Drag anywhere (with inertia) and new photos stream in.
+- **Spotlight centre** — the selected photo is enlarged to the middle of the
+  screen at its natural aspect ratio. The photos around it are re-packed
+  gaplessly into the space above, below, left and right, forming a local
+  spotlight patch that lives in the world and scrolls with it.
+- **Click to select** — clicking a photo enlarges it, pans the camera so it is
+  centred, and reflows its neighbourhood. The previous centre is guaranteed a
+  new, smaller slot around it. There is no "exit": the wall always has a
+  selected centre.
+- **Drag + select together** — after selecting, keep dragging: the spotlight
+  patch travels with the wall and the plain endless mosaic is revealed beyond
+  it. Click a photo out there and the spotlight re-forms around it.
+- **Square corners, no gutters** — every photo meets its neighbours at right
+  angles.
 - **Three sources**
   - **Upload** — drop or pick images; downscaled to 1800 px, re-encoded to WebP
     and stored in IndexedDB. Nothing leaves the device.
@@ -46,8 +50,7 @@ glides to its new place. There is no "exit": the composition always has a centre
     is cached by the browser.
   - **Explore** — `Classic` ships with the extension (instant + offline);
     `Editorial`, `Noir`, `Soft focus` and `Wide` stream from Lorem Picsum.
-- **Bilingual** — English and 中文 with `跟随系统 / Auto / English / 中文`;
-  all panel copy, toasts and labels follow the choice.
+- **Bilingual** — English and 中文 with `跟随系统 / Auto / English / 中文`.
 
 ## Settings
 
@@ -56,6 +59,28 @@ glides to its new place. There is no "exit": the composition always has a centre
 | Background | Upload · URLs · Explore |
 | Atmosphere | Wash · Blur · Film grain |
 | Language | Auto · English · 中文 |
+
+## How the layout works
+
+```
+        infinite wall (gap-free masonry, draggable)
+┌──────────────────────────────────────────────────────────────┐
+│                                                              │
+│      ┌──────────────── spotlight patch (~2× viewport) ────┐   │
+│      │            top band (full patch width)            │   │
+│      ├─────────┬────────────────────────┬────────────────┤   │
+│      │  left   │      CENTRE PHOTO      │     right      │   │
+│      │  band   │   (natural aspect)     │     band       │   │
+│      ├─────────┴────────────────────────┴────────────────┤   │
+│      │           bottom band (full patch width)          │   │
+│      └───────────────────────────────────────────────────┘   │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+The patch is twice the viewport in each direction and anchored in world
+coordinates. The camera centres the selected photo on load and on every
+selection; dragging then moves the patch with the wall.
 
 ## Install (unpacked)
 
@@ -72,33 +97,17 @@ directly in a browser: outside the extension `chrome.storage` falls back to
 ```
 manifest.json            MV3 manifest (new tab override, storage)
 newtab.html              collage, settings button, drawer
-style.css                Material tokens, mosaic, atmosphere, drawer
+style.css                Material tokens, wall, patch, atmosphere, drawer
 i18n.js                  English/中文 dictionary + DOM applier
 store.js                 chrome.storage.local ⇄ localStorage adapter
 library.js               IndexedDB library, upload pipeline, curated sets
-collage.js               centre spotlight layout with tile reflow
-app.js                   selection, drawer, sources, persistence
+collage.js               endless wall + spotlight patch + camera
+app.js                   panning, selection, drawer, sources, persistence
 assets/defaults/         24 bundled photos (instant, offline)
 icons/                   generated PNG icons (16/32/48/128)
 tools/make-icons.mjs     zero-dependency icon generator
 tools/fetch-defaults.mjs refreshes assets/defaults from Lorem Picsum
 ```
-
-## Layout
-
-```
-┌───────────────────────── viewport ─────────────────────────┐
-│                 top band (full width)                     │
-├───────────────┬───────────────────────┬───────────────────┤
-│  left strip   │     CENTRE PHOTO      │   right strip     │
-│               │  (natural aspect)     │                   │
-├───────────────┴───────────────────────┴───────────────────┤
-│                bottom band (full width)                   │
-└───────────────────────────────────────────────────────────┘
-```
-
-Each band is filled with rows of photos; row heights and column widths are
-seeded random, so the mosaic looks different every time. No gaps, no overlaps.
 
 ## Storage model
 
@@ -116,8 +125,8 @@ the browser straight from their host.
 
 | Token | Purpose |
 | ----- | ------- |
-| `--bg-blur` | Blur applied to the mosaic |
-| `--dim` | Strength of the white wash over the mosaic |
+| `--bg-blur` | Blur applied to the collage |
+| `--dim` | Strength of the white wash over the collage |
 | `--grain-opacity` | Film-grain texture |
 | `--blue` / `--ink-*` | Google Material palette |
 
@@ -125,7 +134,7 @@ the browser straight from their host.
 
 | Key | Action |
 | ---- | ------ |
-| `S` | New random composition and centre |
+| `S` | New random wall + centre |
 | `Esc` | Close settings |
 
 ## Icons & default photos

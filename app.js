@@ -1,6 +1,6 @@
 /**
- * app.js — spotlight collage, settings drawer and photo sources.
- * Layout lives in collage.js, photo storage in library.js.
+ * app.js — draggable wall, spotlight selection, settings drawer and sources.
+ * World/patch layout lives in collage.js, photo storage in library.js.
  */
 (() => {
   'use strict';
@@ -90,6 +90,131 @@
     }
   };
 
+  /* ------------------------------- camera -------------------------------- */
+
+  const camera = { x: 0, y: 0 };
+  let camFrame = 0;
+  let panFrame = 0;
+  let camBusy = false;
+  let velocity = { x: 0, y: 0 };
+  let drag = null;
+
+  const applyCamera = () => engine.setCamera(camera.x, camera.y);
+
+  const animateCamera = (target, duration, done) => {
+    cancelAnimationFrame(camFrame);
+    camBusy = true;
+    const from = { x: camera.x, y: camera.y };
+    const start = performance.now();
+
+    const step = (now) => {
+      const progress = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - progress, 5);
+      camera.x = from.x + (target.x - from.x) * eased;
+      camera.y = from.y + (target.y - from.y) * eased;
+      applyCamera();
+      if (progress < 1) {
+        camFrame = requestAnimationFrame(step);
+      } else {
+        camBusy = false;
+        if (done) done();
+      }
+    };
+
+    camFrame = requestAnimationFrame(step);
+  };
+
+  const resetCamera = () => {
+    cancelAnimationFrame(camFrame);
+    cancelAnimationFrame(panFrame);
+    camBusy = false;
+    velocity = { x: 0, y: 0 };
+    camera.x = 0;
+    camera.y = 0;
+    applyCamera();
+  };
+
+  const startInertia = () => {
+    cancelAnimationFrame(panFrame);
+    panFrame = requestAnimationFrame(function step() {
+      velocity.x *= 0.94;
+      velocity.y *= 0.94;
+      camera.x += velocity.x * 16;
+      camera.y += velocity.y * 16;
+      applyCamera();
+      if (Math.hypot(velocity.x, velocity.y) > 0.015) {
+        panFrame = requestAnimationFrame(step);
+      }
+    });
+  };
+
+  const collageEl = $('collage');
+
+  collageEl?.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0 || camBusy) return;
+    cancelAnimationFrame(panFrame);
+    velocity = { x: 0, y: 0 };
+    drag = {
+      id: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: camera.x,
+      originY: camera.y,
+      lastX: event.clientX,
+      lastY: event.clientY,
+      lastT: performance.now(),
+      moved: false,
+      tile: event.target.closest('.tile'),
+    };
+    try {
+      collageEl.setPointerCapture(event.pointerId);
+    } catch {
+      /* ignore */
+    }
+  });
+
+  collageEl?.addEventListener('pointermove', (event) => {
+    if (!drag || event.pointerId !== drag.id) return;
+
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(dx, dy) > 5) {
+      drag.moved = true;
+      document.body.classList.add('is-panning');
+    }
+    if (!drag.moved) return;
+
+    const now = performance.now();
+    const dt = Math.max(1, now - drag.lastT);
+    velocity = {
+      x: (event.clientX - drag.lastX) / dt,
+      y: (event.clientY - drag.lastY) / dt,
+    };
+    drag.lastX = event.clientX;
+    drag.lastY = event.clientY;
+    drag.lastT = now;
+
+    camera.x = drag.originX + dx;
+    camera.y = drag.originY + dy;
+    applyCamera();
+  });
+
+  const endPan = (event) => {
+    if (!drag || (event && event.pointerId !== drag.id)) return;
+    const { moved, tile } = drag;
+    drag = null;
+    document.body.classList.remove('is-panning');
+
+    if (!moved && tile) {
+      selectTile(tile);
+      return;
+    }
+    if (Math.hypot(velocity.x, velocity.y) > 0.06) startInertia();
+  };
+
+  collageEl?.addEventListener('pointerup', endPan);
+  collageEl?.addEventListener('pointercancel', endPan);
+
   /* ------------------------------- wall ---------------------------------- */
 
   const currentCollection = () => settings.collection || 'classic';
@@ -117,6 +242,11 @@
     selectedIndex = pool.length ? Math.floor(Math.random() * pool.length) : 0;
   };
 
+  const viewCenterWorld = () => ({
+    x: window.innerWidth / 2 - camera.x,
+    y: window.innerHeight / 2 - camera.y,
+  });
+
   const renderWall = () => {
     const { pool, label } = poolFor();
     if (!pool.length) {
@@ -128,25 +258,29 @@
       images: decorate(pool, label),
       selected: selectedIndex,
       seed: wallSeed,
+      focus: viewCenterWorld(),
     });
   };
-
-  const wallEl = $('collage-wall');
 
   const selectTile = (tile) => {
     if (!tile || tile.dataset.center === '1') return;
     const index = Number(tile.dataset.index);
     if (!Number.isInteger(index) || index === selectedIndex) return;
-    if (index < 0) return;
+
+    const focus = {
+      x: tile.offsetLeft + tile.offsetWidth / 2,
+      y: tile.offsetTop + tile.offsetHeight / 2,
+    };
+
     selectedIndex = index;
-    renderWall();
+    engine.select({ selected: index, focus });
+    animateCamera(
+      { x: window.innerWidth / 2 - focus.x, y: window.innerHeight / 2 - focus.y },
+      650
+    );
   };
 
-  wallEl?.addEventListener('click', (event) => {
-    selectTile(event.target.closest('.tile'));
-  });
-
-  wallEl?.addEventListener('keydown', (event) => {
+  $('collage-wall')?.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     const tile = event.target.closest('.tile');
     if (!tile) return;
@@ -216,6 +350,7 @@
     }
     syncControls();
     refreshLibraryUI();
+    resetCamera();
     selectRandom();
     renderWall();
     if (message) notify(message);
@@ -315,10 +450,7 @@
   const applySettings = (partial = {}, options = {}) => {
     settings = { ...settings, ...partial };
     const languageChanged = syncControls();
-    if (languageChanged) {
-      refreshLibraryUI();
-      renderWall();
-    }
+    if (languageChanged) refreshLibraryUI();
     if (options.save !== false) persist(options.immediateSave);
   };
 
@@ -380,6 +512,7 @@
         persist();
         syncControls();
         refreshLibraryUI();
+        resetCamera();
         selectRandom();
         renderWall();
         notify(
@@ -453,6 +586,7 @@
       persist();
       syncControls();
       refreshLibraryUI();
+      resetCamera();
       selectRandom();
       renderWall();
       if (urlInput) urlInput.value = '';
@@ -488,6 +622,7 @@
           wallSeed = Math.floor(Math.random() * 1e6);
           persist();
           syncControls();
+          resetCamera();
           selectRandom();
           renderWall();
           notify(t('toast.collection', { name: setLabel(set.id) }));
@@ -514,6 +649,7 @@
     };
     applySettings({}, { immediateSave: true });
     refreshLibraryUI();
+    resetCamera();
     selectRandom();
     renderWall();
     notify(t('toast.layoutReset'));
@@ -523,6 +659,7 @@
 
   const shuffleWall = () => {
     wallSeed = Math.floor(Math.random() * 1e6);
+    resetCamera();
     selectRandom();
     renderWall();
     notify(t('toast.shuffled'));
@@ -585,6 +722,7 @@
       buildChips();
       syncControls();
       refreshLibraryUI();
+      applyCamera();
       selectRandom();
       renderWall();
     } catch (err) {
