@@ -3,9 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="light dark" />
     <title>New Tab</title>
     <link rel="icon" href="icons/icon128.png" />
+    <script src="theme.js"></script>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
@@ -122,6 +123,16 @@
             <input class="range" id="blur" type="range" min="0" max="18" step="1" value="1" />
           </div>
 
+        </section>
+
+        <!-- ─── Appearance ─────────────────────────────────────────── -->
+        <section class="group">
+          <h3 class="group__label" data-i18n="group.appearance">Appearance</h3>
+          <div class="seg" role="group" aria-label="Appearance" id="theme-seg">
+            <button type="button" data-value="auto" data-i18n="theme.auto">Auto</button>
+            <button type="button" data-value="light" data-i18n="theme.light">Light</button>
+            <button type="button" data-value="dark" data-i18n="theme.dark">Dark</button>
+          </div>
         </section>
 
         <!-- ─── Language ───────────────────────────────────────────── -->

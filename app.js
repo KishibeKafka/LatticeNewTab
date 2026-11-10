@@ -19,6 +19,7 @@
   const DEFAULTS = {
     dim: 0,
     blur: 0,
+    theme: 'auto',
     source: 'curated',
     collection: 'classic',
     language: 'auto',
@@ -588,6 +589,25 @@
 
   /* ------------------------------- wall ---------------------------------- */
 
+  const THEME_CACHE = 'lattice:theme';
+  const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+
+  const applyTheme = () => {
+    const preference = settings.theme || 'auto';
+    const dark = preference === 'dark' || (preference === 'auto' && systemDark.matches);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+    try {
+      localStorage.setItem(THEME_CACHE, preference);
+    } catch (err) {
+      /* storage may be unavailable */
+    }
+  };
+
+  systemDark.addEventListener('change', () => {
+    if ((settings.theme || 'auto') === 'auto') applyTheme();
+  });
+
   const currentCollection = () => settings.collection || 'classic';
   const setLabel = (id) => t(`set.${id}.label`);
 
@@ -802,6 +822,8 @@
     }
 
     syncSeg('lang-seg', settings.language);
+    syncSeg('theme-seg', settings.theme);
+    applyTheme();
 
     document.querySelectorAll('.chip[data-collection]').forEach((chip) => {
       chip.classList.toggle(
@@ -846,6 +868,7 @@
   };
 
   bindSeg('lang-seg', (value) => applySettings({ language: value }));
+  bindSeg('theme-seg', (value) => applySettings({ theme: value }));
 
   document.querySelectorAll('.src-tab').forEach((tab) => {
     tab.addEventListener('click', () => activateTab(tab.dataset.tab));
@@ -1068,6 +1091,8 @@
         if (known.includes(value)) clean[key] = value;
       } else if (key === 'language') {
         if (['auto', 'en', 'zh'].includes(value)) clean[key] = value;
+      } else if (key === 'theme') {
+        if (['auto', 'light', 'dark'].includes(value)) clean[key] = value;
       }
     }
     return clean;

@@ -35,6 +35,22 @@
   --shadow-2: 0 1px 3px rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
   --shadow-sheet: 0 16px 48px rgba(32, 33, 36, 0.3);
 
+  --wall-bg: #f1f3f4;
+  --wall-wash: linear-gradient(180deg, #ffffff 0%, #f7f8fa 45%, #ffffff 100%);
+  --wall-vignette: radial-gradient(130% 110% at 50% 45%, transparent 60%, rgba(32, 33, 36, 0.1) 100%);
+  --shortcut-label-shadow: 0 1px 2px rgba(255, 255, 255, 0.9), 0 0 10px rgba(255, 255, 255, 0.7);
+  --shortcut-action-bg: rgba(255, 255, 255, 0.78);
+  --shortcut-action-border: rgba(60, 64, 67, 0.34);
+  --icon-bg: rgba(255, 255, 255, 0.82);
+  --icon-bg-hover: #ffffff;
+  --scrim-bg: rgba(32, 33, 36, 0.24);
+  --seg-active-bg: #ffffff;
+  --btn-solid-bg: #1a73e8;
+  --btn-solid-ink: #ffffff;
+  --btn-solid-hover: #1765cc;
+  --dialog-backdrop: rgba(32, 33, 36, 0.32);
+  color-scheme: light;
+
   /* user-tunable (written by app.js) */
   --tile-radius: 0px;
   --bg-blur: 0px;
@@ -48,6 +64,53 @@
 
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+}
+
+
+/* night mode */
+html[data-theme="dark"] {
+  color-scheme: dark;
+
+  --blue: #8ab4f8;
+  --blue-ink: #aecbfa;
+  --blue-soft: rgba(138, 180, 248, 0.16);
+  --blue-tint: rgba(138, 180, 248, 0.08);
+
+  --surface: #1e1f24;
+  --surface-2: #26272d;
+  --surface-3: #2c2d34;
+  --hover: rgba(255, 255, 255, 0.08);
+
+  --ink: #f1f3f4;
+  --ink-2: #d3d6da;
+  --ink-3: #a7acb3;
+  --ink-4: #8a9096;
+
+  --line: #3c4046;
+  --line-2: #33353b;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 3px 1px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 1px 3px rgba(0, 0, 0, 0.5), 0 4px 8px 3px rgba(0, 0, 0, 0.3);
+  --shadow-sheet: 0 20px 60px rgba(0, 0, 0, 0.6);
+
+  --wall-bg: #0f1014;
+  --wall-wash: linear-gradient(180deg, rgba(8, 9, 13, 0.92) 0%, rgba(8, 9, 13, 0.5) 45%, rgba(8, 9, 13, 0.95) 100%);
+  --wall-vignette: radial-gradient(130% 110% at 50% 45%, transparent 58%, rgba(0, 0, 0, 0.42) 100%);
+  --shortcut-label-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 0 12px rgba(0, 0, 0, 0.6);
+  --shortcut-action-bg: rgba(255, 255, 255, 0.1);
+  --shortcut-action-border: rgba(255, 255, 255, 0.28);
+  --icon-bg: rgba(30, 31, 36, 0.72);
+  --icon-bg-hover: #2c2d34;
+  --scrim-bg: rgba(0, 0, 0, 0.5);
+  --seg-active-bg: #3a3c44;
+  --btn-solid-bg: #8ab4f8;
+  --btn-solid-ink: #0b1220;
+  --btn-solid-hover: #aecbfa;
+  --dialog-backdrop: rgba(0, 0, 0, 0.55);
+}
+
+html[data-theme="dark"] .atmosphere__wash {
+  opacity: min(1, calc(var(--dim) + 0.16));
 }
 
 /* ── 2. Reset & base ────────────────────────────────────────────────────── */
@@ -66,7 +129,7 @@ body {
 body {
   margin: 0;
   overflow: hidden;
-  background: #dde0e5;
+  background: var(--wall-bg);
   color: var(--ink);
   font-family: var(--font-ui);
   font-size: 15px;
@@ -120,7 +183,7 @@ svg {
   inset: 0;
   z-index: 0;
   overflow: hidden;
-  background: #f1f3f4;
+  background: var(--wall-bg);
   cursor: grab;
   touch-action: none;
   filter: blur(var(--bg-blur)) saturate(1.02);
@@ -138,7 +201,7 @@ svg {
   position: absolute;
   margin: 0;
   border-radius: 0;
-  background: #f1f3f4;
+  background: var(--wall-bg);
   cursor: pointer;
   transition:
     left 0.55s var(--ease-emphasized),
@@ -177,7 +240,7 @@ body.is-panning .tile {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background: #f1f3f4;
+  background: var(--wall-bg);
 }
 
 .tile__img {
@@ -218,7 +281,7 @@ body.is-panning .tile {
 .atmosphere__wash {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, #ffffff 0%, #f7f8fa 45%, #ffffff 100%);
+  background: var(--wall-wash);
   opacity: var(--dim);
   transition: opacity 0.3s linear;
 }
@@ -226,7 +289,7 @@ body.is-panning .tile {
 .atmosphere__vignette {
   position: absolute;
   inset: 0;
-  background: radial-gradient(130% 110% at 50% 45%, transparent 60%, rgba(32, 33, 36, 0.1) 100%);
+  background: var(--wall-vignette);
 }
 
 /* ── Shortcuts row ─────────────────────────────────────────────────────── */
@@ -312,9 +375,7 @@ body.is-panning .tile {
   line-height: 1.2;
   color: var(--ink-2);
   opacity: 0.95;
-  text-shadow:
-    0 1px 2px rgba(255, 255, 255, 0.9),
-    0 0 10px rgba(255, 255, 255, 0.7);
+  text-shadow: var(--shortcut-label-shadow);
 }
 
 .shortcut:hover .shortcut__tile {
@@ -337,8 +398,8 @@ body.is-panning .tile {
 }
 
 .shortcut--action .shortcut__tile {
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px dashed rgba(60, 64, 67, 0.34);
+  background: var(--shortcut-action-bg);
+  border: 1px dashed var(--shortcut-action-border);
   color: var(--ink-2);
 }
 
@@ -348,7 +409,7 @@ body.is-panning .tile {
 }
 
 .shortcut--action:hover .shortcut__tile {
-  background: #fff;
+  background: var(--surface);
   border-color: var(--blue);
   color: var(--blue);
 }
@@ -406,7 +467,7 @@ body.is-panning .tile {
   flex: 0 0 auto;
   border-radius: 12px;
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--surface-2);
   overflow: hidden;
 }
 
@@ -435,13 +496,13 @@ body.is-panning .tile {
   padding: 0;
   width: min(400px, calc(100vw - 32px));
   border-radius: 16px;
-  background: #fff;
+  background: var(--surface);
   color: var(--ink);
   box-shadow: 0 24px 64px rgba(32, 33, 36, 0.35);
 }
 
 .shortcut-dialog::backdrop {
-  background: rgba(32, 33, 36, 0.32);
+  background: var(--dialog-backdrop);
   backdrop-filter: blur(3px);
 }
 
@@ -510,7 +571,7 @@ body.is-drawer-open .settings-btn {
   place-items: center;
   border-radius: 50%;
   color: var(--ink-2);
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--icon-bg);
   box-shadow: var(--shadow-1);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -525,7 +586,7 @@ body.is-drawer-open .settings-btn {
 }
 
 .icon-btn:hover {
-  background: #fff;
+  background: var(--icon-bg-hover);
   box-shadow: var(--shadow-2);
 }
 
@@ -537,7 +598,7 @@ body.is-drawer-open .settings-btn {
   position: fixed;
   inset: 0;
   z-index: 25;
-  background: rgba(32, 33, 36, 0.24);
+  background: var(--scrim-bg);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.35s var(--ease-standard);
@@ -736,7 +797,7 @@ body.is-drawer-open .drawer {
 .src-tab.is-active,
 .seg button.is-active {
   color: var(--blue-ink);
-  background: var(--surface);
+  background: var(--seg-active-bg);
   box-shadow: 0 1px 3px rgba(60, 64, 67, 0.24);
 }
 
@@ -1106,14 +1167,14 @@ body.is-drawer-open .drawer {
 }
 
 .btn--filled {
-  background: var(--blue);
-  border-color: var(--blue);
-  color: #fff;
+  background: var(--btn-solid-bg);
+  border-color: var(--btn-solid-bg);
+  color: var(--btn-solid-ink);
 }
 
 .btn--filled:hover {
-  background: #1765cc;
-  border-color: #1765cc;
+  background: var(--btn-solid-hover);
+  border-color: var(--btn-solid-hover);
   box-shadow: var(--shadow-1);
 }
 

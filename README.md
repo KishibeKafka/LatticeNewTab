@@ -11,6 +11,8 @@ expansion that re-gears only the block you clicked. English / 中文.
 
 ![Customize panel](docs/customize.png)
 
+![Night mode](docs/dark.png)
+
 ## Status
 
 | Stage | Scope | State |
@@ -27,6 +29,7 @@ expansion that re-gears only the block you clicked. English / 中文.
 | 10 | Shortcut row from most-visited sites | ✅ |
 | 11 | White wall background and shortcut editing | ✅ |
 | 12 | Shortcut row, drag reorder, custom icons | ✅ |
+| 13 | Auto / Light / Dark appearance | ✅ |
 
 ## Features
 
@@ -61,6 +64,11 @@ expansion that re-gears only the block you clicked. English / 中文.
 - **Light wall** — the backing of the wall (and the placeholder of cards while
   photos decode) is a soft white (`#f1f3f4`), so loading and empty edges read
   bright rather than black.
+- **Night mode** — Appearance offers Auto / Light / Dark. Auto follows the
+  system scheme live; dark mode restyles the wall backing, drawer, controls,
+  shortcut row, editor dialog and settings button, and adds a subtle night wash
+  over the photos. The choice is stored with the other settings and mirrored to
+  localStorage so the first frame is already dark.
 - **Three sources**
   - **Upload** — drop or pick images; downscaled to 1800 px, re-encoded to WebP
     and stored in IndexedDB. Nothing leaves the device.
@@ -75,6 +83,7 @@ expansion that re-gears only the block you clicked. English / 中文.
 | ----- | -------- |
 | Background | Upload · URLs · Explore |
 | Atmosphere | Wash · Blur |
+| Appearance | Auto · Light · Dark |
 | Language | Auto · English · 中文 |
 
 ## Layout
@@ -114,6 +123,7 @@ manifest.json            MV3 manifest (new tab override, storage)
 newtab.html              collage, settings button, drawer
 style.css                Material tokens, wall, cards, atmosphere, drawer
 i18n.js                  English/中文 dictionary + DOM applier
+theme.js                 pre-paint theme resolution (localStorage cache)
 store.js                 chrome.storage.local ⇄ localStorage adapter
 library.js               IndexedDB library, upload pipeline, curated sets
 shortcuts.js             most-visited sites + built-in shortcut fallbacks

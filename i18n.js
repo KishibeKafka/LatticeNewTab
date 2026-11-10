@@ -47,6 +47,10 @@
       'group.background': 'Background',
       'group.wall': 'Wall',
       'group.atmosphere': 'Atmosphere',
+      'group.appearance': 'Appearance',
+      'theme.auto': 'Auto',
+      'theme.light': 'Light',
+      'theme.dark': 'Dark',
       'group.clock': 'Clock & search',
 
       'tab.upload': 'Upload',
@@ -185,6 +189,10 @@
       'group.background': '背景',
       'group.wall': '拼贴',
       'group.atmosphere': '氛围',
+      'group.appearance': '外观',
+      'theme.auto': '跟随系统',
+      'theme.light': '浅色',
+      'theme.dark': '深色',
       'group.clock': '时钟与搜索',
 
       'tab.upload': '上传',
