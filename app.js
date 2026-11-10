@@ -263,19 +263,11 @@
   };
 
   const selectTile = (tile) => {
-    if (!tile || tile.dataset.center === '1') return;
-    const index = Number(tile.dataset.index);
-    if (!Number.isInteger(index) || index === selectedIndex) return;
-
-    const focus = {
-      x: tile.offsetLeft + tile.offsetWidth / 2,
-      y: tile.offsetTop + tile.offsetHeight / 2,
-    };
-
-    selectedIndex = index;
-    engine.select({ selected: index, focus });
+    if (!tile) return;
+    const center = engine.selectTile(tile);
+    if (!center) return;
     animateCamera(
-      { x: window.innerWidth / 2 - focus.x, y: window.innerHeight / 2 - focus.y },
+      { x: window.innerWidth / 2 - center.x, y: window.innerHeight / 2 - center.y },
       650
     );
   };

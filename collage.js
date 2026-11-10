@@ -58,7 +58,15 @@
     prefix: [],
     periodWidth: 1,
     baseWidth: 320,
+    /** surrounding occurrences: [{ id, img }] — duplicates have distinct ids */
     order: [],
+    centerToken: null,
+    tokenSeq: 0,
+  };
+
+  const newToken = (img) => {
+    state.tokenSeq += 1;
+    return { id: `t${state.tokenSeq}`, img };
   };
 
   const aspectOf = (index) => {
@@ -289,12 +297,15 @@
       centerH = centerW / aspect;
     }
 
+    const centerToken = state.centerToken || newToken(state.selected);
+
     const center = {
       x: state.focus.x - centerW / 2,
       y: state.focus.y - centerH / 2,
       w: centerW,
       h: centerH,
-      imageIndex: state.selected,
+      imageIndex: centerToken.img,
+      tokenId: centerToken.id,
       center: true,
     };
 
@@ -303,26 +314,32 @@
     let cursor = 0;
 
     const take = () => {
-      if (!state.order.length) return state.selected;
-      const index = state.order[cursor % state.order.length];
+      if (cursor < state.order.length) {
+        const token = state.order[cursor];
+        cursor += 1;
+        return token;
+      }
+      // geometry needed more occurrences than planned: extend with a new one
+      const token = newToken(state.selected);
+      state.order.push(token);
       cursor += 1;
-      return index;
+      return token;
     };
 
     const laidRow = () => {
-      const indices = [];
+      const tokens = [];
       let aspectSum = 0;
       for (let i = 0; i < ROW_IMAGES; i += 1) {
-        const index = take();
-        indices.push(index);
-        aspectSum += aspectOf(index);
+        const token = take();
+        tokens.push(token);
+        aspectSum += aspectOf(token.img);
       }
       const height = rowWidth / Math.max(0.001, aspectSum);
       let x = state.focus.x - rowWidth / 2;
       const items = [];
-      for (const index of indices) {
-        const width = height * aspectOf(index);
-        items.push({ index, x, width, height });
+      for (const token of tokens) {
+        const width = height * aspectOf(token.img);
+        items.push({ token, x, width, height });
         x += width;
       }
       return items;
@@ -335,7 +352,8 @@
         y: center.y - item.height,
         w: item.width,
         h: item.height,
-        imageIndex: item.index,
+        imageIndex: item.token.img,
+        tokenId: item.token.id,
         center: false,
       });
     }
@@ -347,26 +365,27 @@
         y: center.y + centerH,
         w: item.width,
         h: item.height,
-        imageIndex: item.index,
+        imageIndex: item.token.img,
+        tokenId: item.token.id,
         center: false,
       });
     }
 
     // side columns stack to exactly the centre height
     const laidColumn = () => {
-      const indices = [];
+      const tokens = [];
       let inverseSum = 0;
       for (let i = 0; i < COLUMN_IMAGES; i += 1) {
-        const index = take();
-        indices.push(index);
-        inverseSum += 1 / aspectOf(index);
+        const token = take();
+        tokens.push(token);
+        inverseSum += 1 / aspectOf(token.img);
       }
       const width = centerH / Math.max(0.001, inverseSum);
       const items = [];
       let y = center.y;
-      for (const index of indices) {
-        const height = width / aspectOf(index);
-        items.push({ index, y, width, height });
+      for (const token of tokens) {
+        const height = width / aspectOf(token.img);
+        items.push({ token, y, width, height });
         y += height;
       }
       return items;
@@ -382,7 +401,8 @@
           y: item.y,
           w: item.width,
           h: item.height,
-          imageIndex: item.index,
+          imageIndex: item.token.img,
+          tokenId: item.token.id,
           center: false,
         });
       }
@@ -397,7 +417,8 @@
           y: item.y,
           w: item.width,
           h: item.height,
-          imageIndex: item.index,
+          imageIndex: item.token.img,
+          tokenId: item.token.id,
           center: false,
         });
       }
@@ -414,6 +435,7 @@
     el.style.width = `${slot.w.toFixed(2)}px`;
     el.style.height = `${slot.h.toFixed(2)}px`;
     el.dataset.index = String(imageIndex);
+    el.dataset.token = slot.tokenId || '';
     el.dataset.center = slot.center ? '1' : '0';
     el.dataset.src = image.src;
     el.dataset.label = image.label || '';
@@ -431,24 +453,24 @@
     }
   };
 
-  const buildPatch = () => {
+  const layoutPatch = () => {
     const slots = buildPatchSlots();
     const free = new Map();
     for (const item of patchTiles) {
-      if (!free.has(item.imageIndex)) free.set(item.imageIndex, []);
-      free.get(item.imageIndex).push(item);
+      if (!free.has(item.tokenId)) free.set(item.tokenId, []);
+      free.get(item.tokenId).push(item);
     }
 
     const next = [];
 
     for (const slot of slots) {
-      const queue = free.get(slot.imageIndex);
+      const queue = free.get(slot.tokenId);
       let tile = queue && queue.length ? queue.pop() : null;
 
       if (tile) {
         tile.el.classList.remove('is-leaving');
         applyPatchSlot(tile.el, slot, slot.imageIndex);
-        tile.imageIndex = slot.imageIndex;
+        tile.tokenId = slot.tokenId;
         next.push(tile);
       } else {
         const el = makeTile(slot.imageIndex, { x: slot.x, y: slot.y, w: slot.w, h: slot.h }, 'patch', {
@@ -457,7 +479,7 @@
         });
         applyPatchSlot(el, slot, slot.imageIndex);
         wall.appendChild(el);
-        next.push({ el, imageIndex: slot.imageIndex });
+        next.push({ el, tokenId: slot.tokenId });
       }
     }
 
@@ -473,21 +495,29 @@
     }
 
     patchTiles = next;
+    return { x: state.focus.x, y: state.focus.y };
   };
 
   /* ═══════════════════════════ public API ══════════════════════════════ */
 
-  const buildOrder = () => {
+  const buildTokens = (selectedImage) => {
     const others = [];
     for (let i = 0; i < state.images.length; i += 1) {
-      if (i !== state.selected) others.push(i);
+      if (i !== selectedImage) others.push(i);
     }
-    const rand = mulberry32(hash(state.selected, state.seed, 53));
+    const rand = mulberry32(hash(selectedImage, state.seed, 53));
     for (let i = others.length - 1; i > 0; i -= 1) {
       const j = Math.floor(rand() * (i + 1));
       [others[i], others[j]] = [others[j], others[i]];
     }
-    state.order = others.length ? others : [state.selected];
+
+    const pool = others.length ? others : [selectedImage];
+    state.order = [];
+    for (let i = 0; i < SURROUND_SLOTS; i += 1) {
+      state.order.push(newToken(pool[i % pool.length]));
+    }
+    state.centerToken = newToken(selectedImage);
+    state.selected = selectedImage;
   };
 
   const render = (options = {}) => {
@@ -511,31 +541,51 @@
 
     if (!images.length) return 0;
 
-    buildOrder();
-    buildPatch();
+    buildTokens(state.selected);
     updateWall();
-    return patchTiles.length;
+    layoutPatch();
+    return { x: state.focus.x, y: state.focus.y };
   };
 
-  const select = (options = {}) => {
-    if (!state.images.length) return;
-    const selected = clamp(Math.round(options.selected ?? 0), 0, state.images.length - 1);
-    if (selected !== state.selected) {
-      const oldCenter = state.selected;
-      const at = state.order.indexOf(selected);
-      if (at > -1) {
-        // swap: the old centre takes the clicked photo's slot, everything else keeps its place
-        state.order[at] = oldCenter;
-      } else {
-        // clicked a wall photo: put the old centre in the outermost slot,
-        // leaving every other surrounding slot untouched
-        const insertAt = Math.min(state.order.length, SURROUND_SLOTS - 1);
-        state.order.splice(insertAt, 0, oldCenter);
-      }
-      state.selected = selected;
+  const selectTile = (el) => {
+    if (!el || !state.images.length) return null;
+
+    if (el.classList.contains('tile--patch')) {
+      if (el.dataset.center === '1') return null;
+      const tokenId = el.dataset.token;
+      const at = state.order.findIndex((token) => token.id === tokenId);
+      if (at < 0 || !state.centerToken) return null;
+
+      const clicked = state.order[at];
+      const oldCenter = state.centerToken;
+      // swap occurrences (ids), not images: duplicates stay distinct
+      state.order[at] = oldCenter;
+      state.centerToken = clicked;
+      state.selected = clicked.img;
+
+      state.focus = {
+        x: el.offsetLeft + el.offsetWidth / 2,
+        y: el.offsetTop + el.offsetHeight / 2,
+      };
+
+      layoutPatch();
+      return { x: state.focus.x, y: state.focus.y };
     }
-    state.focus = options.focus || state.focus;
-    buildPatch();
+
+    if (el.classList.contains('tile--wall')) {
+      const imageIndex = Number(el.dataset.index);
+      if (!Number.isInteger(imageIndex)) return null;
+      const focus = {
+        x: el.offsetLeft + el.offsetWidth / 2,
+        y: el.offsetTop + el.offsetHeight / 2,
+      };
+      state.focus = focus;
+      buildTokens(imageIndex);
+      layoutPatch();
+      return focus;
+    }
+
+    return null;
   };
 
   const setCamera = (x, y) => {
@@ -554,8 +604,8 @@
     wallTiles.clear();
     columns.clear();
     lastRange = '';
-    buildPatch();
     updateWall();
+    layoutPatch();
   };
 
   let resizeTimer = 0;
@@ -566,7 +616,7 @@
 
   window.LatticeCollage = {
     render,
-    select,
+    selectTile,
     setCamera,
     tileCount: () => wallTiles.size + patchTiles.length,
   };

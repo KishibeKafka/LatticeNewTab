@@ -26,6 +26,7 @@ grows, and its neighbourhood reflows around it. **English / 中文.**
 | 8 | Drag + click-to-centre + local reflow | ✅ |
 | 9 | Complete photos (no crop) and stable swap | ✅ |
 | 10 | No photo ever covers another | ✅ |
+| 11 | Repeated photos behave as independent tiles | ✅ |
 
 ## Features
 
