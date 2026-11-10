@@ -26,7 +26,6 @@
  *   collapse()
  *   activeRect() -> rect | null
  *   setCamera(x, y, scale)
- *   refreshCaptions()
  */
 (() => {
   'use strict';
@@ -396,13 +395,9 @@
     img.addEventListener('load', () => img.classList.add('is-loaded'), { once: true });
     img.addEventListener('error', () => el.classList.add('is-failed'), { once: true });
 
-    const caption = document.createElement('figcaption');
-    caption.className = 'tile__caption';
-    caption.textContent = image.label || '';
     el.setAttribute('aria-label', image.aria || image.label || '');
 
     frame.appendChild(img);
-    frame.appendChild(caption);
     el.appendChild(frame);
 
     return el;
@@ -434,7 +429,6 @@
     const point = state.focusPoints.get(photoIndex) || { x: 50, y: 50 };
     img.style.objectPosition = `${point.x}% ${point.y}%`;
     img.style.objectFit = isExpanded ? 'contain' : 'cover';
-    el.querySelector('.tile__caption').textContent = image.label || '';
 
     el.classList.toggle('is-expanded', isExpanded);
     el.setAttribute('role', isExpanded ? 'img' : 'button');
@@ -603,22 +597,12 @@
     schedule();
   };
 
-  const refreshCaptions = () => {
-    for (const entry of state.tiles.values()) {
-      const image = state.images[entry.photoIndex];
-      if (!image) continue;
-      entry.el.querySelector('.tile__caption').textContent = image.label || '';
-      entry.el.setAttribute('aria-label', image.aria || image.label || '');
-    }
-  };
-
   window.LatticeCollage = {
     render,
     expandTile,
     collapse,
     activeRect: expandedWorldRect,
     setCamera,
-    refreshCaptions,
     counts: () => ({ tiles: state.tiles.size, active: state.active }),
   };
 })();

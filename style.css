@@ -203,36 +203,6 @@ body.is-panning .tile {
   display: none;
 }
 
-.tile__caption {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 26px 20px 16px;
-  background: linear-gradient(0deg, rgba(9, 10, 14, 0.85), rgba(9, 10, 14, 0.42) 58%, transparent);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  opacity: 0;
-  transform: translateY(8px);
-  transition:
-    opacity 0.3s var(--ease-standard),
-    transform 0.5s var(--ease-emphasized);
-  pointer-events: none;
-}
-
-.tile.is-expanded .tile__caption {
-  opacity: 1;
-  transform: none;
-  font-size: clamp(15px, 1.5vw, 19px);
-  font-weight: 500;
-  padding-bottom: 22px;
-}
-
 .tile.is-entering .tile__frame {
   animation: tile-in 0.5s var(--ease-emphasized) both;
 }

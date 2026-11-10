@@ -23,7 +23,7 @@ expansion that re-gears only the block you clicked. English / 中文.
 | 6 | Endless draggable wall | ✅ |
 | 7 | Block templates, reflections, viewport culling | ✅ |
 | 8 | 6×6 expansion with local block reflow | ✅ |
-| 9 | Glow / inner stroke / title band, smart framing | ✅ |
+| 9 | Glow / inner stroke, smart framing | ✅ |
 
 ## Features
 
@@ -42,8 +42,7 @@ expansion that re-gears only the block you clicked. English / 中文.
   Clicking another card switches the expansion, clicking the open card (or a
   gap / `Esc`) collapses it.
 - **Camera glide** — the camera pans to the expanded card; the expanded card
-  gets a white focus ring, an inner peach glow and a title band at its lower
-  edge.
+  gets an inset white focus ring and an inner peach glow.
 - **Smart framing** — artwork fills the card's gear with `object-fit: cover`
   and a focus point (`object-position`). The focus point comes from the
   browser's `FaceDetector` when available and falls back to centre; the
