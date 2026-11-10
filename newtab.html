@@ -166,6 +166,15 @@
           <input class="text-input" id="shortcut-url" type="text" inputmode="url" autocomplete="off" placeholder="https://example.com" />
         </label>
 
+        <div class="shortcut-dialog__icon">
+          <span class="shortcut-dialog__preview"><img id="shortcut-icon-preview" alt="" /></span>
+          <div class="shortcut-dialog__icon-actions">
+            <label class="btn" for="shortcut-icon-input" data-i18n="shortcuts.icon">Custom icon</label>
+            <input class="sr-only" type="file" id="shortcut-icon-input" accept="image/*" />
+            <button class="text-btn" id="shortcut-icon-reset" type="button" data-i18n="shortcuts.iconReset">Use site icon</button>
+          </div>
+        </div>
+
         <p class="shortcut-dialog__error" id="shortcut-error" data-i18n="shortcuts.invalidUrl" hidden>Enter a valid URL</p>
 
         <div class="shortcut-dialog__actions">

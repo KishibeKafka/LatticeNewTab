@@ -33,6 +33,8 @@
       'shortcuts.newTitle': 'New shortcut',
       'shortcuts.editTitle': 'Edit shortcut',
       'shortcuts.invalidUrl': 'Enter a valid URL',
+      'shortcuts.icon': 'Custom icon',
+      'shortcuts.iconReset': 'Use site icon',
       'shortcuts.remove': 'Remove {name}',
 
       'shortcut.upload': 'Upload',
@@ -171,6 +173,8 @@
       'shortcuts.newTitle': '新建快捷方式',
       'shortcuts.editTitle': '编辑快捷方式',
       'shortcuts.invalidUrl': '请输入有效的网址',
+      'shortcuts.icon': '自定义图标',
+      'shortcuts.iconReset': '使用网站图标',
       'shortcuts.remove': '移除 {name}',
 
       'shortcut.upload': '上传',

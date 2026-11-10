@@ -38,6 +38,9 @@
   let shortcutsCustom = false;
   let shortcutsEditing = false;
   let editingShortcutIndex = -1;
+  let editingIcon = '';
+  let draggedShortcut = -1;
+  let suppressShortcutClick = 0;
   let toastTimer = 0;
   let appliedLanguage = null;
 
@@ -111,7 +114,10 @@
   let drag = null;
   let lastViewport = { w: window.innerWidth, h: window.innerHeight };
 
-  const applyCamera = () => engine.setCamera(camera.x, camera.y, camera.scale);
+  const applyCamera = () => {
+    engine.setCamera(camera.x, camera.y, camera.scale);
+    scheduleShortcutLayout();
+  };
 
   const targetForRect = (rect) => ({
     x: window.innerWidth / 2 - (rect.x + rect.w / 2) * camera.scale,
@@ -253,6 +259,9 @@
   const shortcutUrl = $('shortcut-url');
   const shortcutError = $('shortcut-error');
   const shortcutDelete = $('shortcut-delete');
+  const shortcutIconInput = $('shortcut-icon-input');
+  const shortcutIconPreview = $('shortcut-icon-preview');
+  const shortcutIconReset = $('shortcut-icon-reset');
   const SHORTCUTS_KEY = 'lattice:shortcuts';
   const MAX_SHORTCUTS = 12;
 
@@ -294,10 +303,16 @@
       if (!/^https?:\/\//i.test(item.url)) continue;
       if (seen.has(item.url)) continue;
       seen.add(item.url);
-      clean.push({
+      const icon =
+        typeof item.icon === 'string' && /^(data:image\/|https?:\/\/)/i.test(item.icon)
+          ? item.icon
+          : '';
+      const entry = {
         title: String(item.title || hostOf(item.url) || item.url).slice(0, 60),
         url: item.url,
-      });
+      };
+      if (icon) entry.icon = icon;
+      clean.push(entry);
       if (clean.length >= MAX_SHORTCUTS) break;
     }
     return clean;
@@ -347,7 +362,7 @@
     icon.className = 'shortcut__icon';
     icon.alt = '';
     icon.decoding = 'async';
-    icon.src = faviconFor(site.url);
+    icon.src = site.icon || faviconFor(site.url);
     icon.addEventListener('error', () => icon.remove(), { once: true });
 
     tile.appendChild(letter);
@@ -360,11 +375,47 @@
     button.appendChild(tile);
     button.appendChild(label);
     button.addEventListener('click', () => {
+      if (Date.now() < suppressShortcutClick) return;
       if (shortcutsEditing) openShortcutDialog(index);
       else openShortcut(site.url);
     });
 
     wrapper.appendChild(button);
+
+    if (shortcutsEditing) {
+      wrapper.draggable = true;
+      wrapper.addEventListener('dragstart', (event) => {
+        if (!event.dataTransfer) return;
+        draggedShortcut = index;
+        suppressShortcutClick = Date.now() + 500;
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', String(index));
+        wrapper.classList.add('is-dragging');
+      });
+      wrapper.addEventListener('dragend', () => {
+        wrapper.classList.remove('is-dragging');
+        draggedShortcut = -1;
+      });
+      wrapper.addEventListener('dragover', (event) => {
+        if (draggedShortcut < 0) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        wrapper.classList.add('is-drop-target');
+      });
+      wrapper.addEventListener('dragleave', () => wrapper.classList.remove('is-drop-target'));
+      wrapper.addEventListener('drop', async (event) => {
+        event.preventDefault();
+        wrapper.classList.remove('is-drop-target');
+        const source = Number(event.dataTransfer?.getData('text/plain'));
+        if (!Number.isInteger(source) || source === index) return;
+        const [moved] = shortcutsList.splice(source, 1);
+        const destination = source < index ? index - 1 : index;
+        shortcutsList.splice(destination, 0, moved);
+        suppressShortcutClick = Date.now() + 300;
+        await persistShortcuts();
+        renderShortcuts();
+      });
+    }
 
     if (shortcutsEditing) {
       const remove = document.createElement('button');
@@ -434,11 +485,66 @@
 
     shortcutsEl.replaceChildren(...items);
     shortcutsEl.hidden = false;
+    shortcutsEl.classList.toggle('is-editing', shortcutsEditing);
+    scheduleShortcutLayout();
   };
 
   const toggleShortcutEditing = () => {
     shortcutsEditing = !shortcutsEditing;
     renderShortcuts();
+  };
+
+  /* -- ring layout: shortcuts orbit the expanded photo -- */
+
+  let shortcutLayoutFrame = 0;
+
+  const scheduleShortcutLayout = () => {
+    if (shortcutLayoutFrame) return;
+    shortcutLayoutFrame = requestAnimationFrame(() => {
+      shortcutLayoutFrame = 0;
+      layoutShortcuts();
+    });
+  };
+
+  const layoutShortcuts = () => {
+    if (!shortcutsEl) return;
+    const rowMode = window.innerWidth < 700;
+    shortcutsEl.classList.toggle('is-row', rowMode);
+
+    const items = [...shortcutsEl.children];
+    if (rowMode) {
+      items.forEach((el) => {
+        el.style.left = '';
+        el.style.top = '';
+      });
+      return;
+    }
+    if (!items.length) return;
+
+    const rect = engine.activeRect ? engine.activeRect() : null;
+    let cx = window.innerWidth / 2;
+    let cy = window.innerHeight / 2;
+    let width = 340;
+    let height = 300;
+
+    if (rect) {
+      const scale = camera.scale;
+      cx = (rect.x + rect.w / 2) * scale + camera.x;
+      cy = (rect.y + rect.h / 2) * scale + camera.y;
+      width = rect.w * scale;
+      height = rect.h * scale;
+    }
+
+    const count = items.length;
+    const rx = Math.min(width / 2 + 66, window.innerWidth / 2 - 40);
+    const ry = Math.min(height / 2 + 58, window.innerHeight / 2 - 40);
+    const start = -Math.PI / 2;
+
+    items.forEach((el, index) => {
+      const angle = start + (index * Math.PI * 2) / count;
+      el.style.left = `${(cx + rx * Math.cos(angle)).toFixed(1)}px`;
+      el.style.top = `${(cy + ry * Math.sin(angle)).toFixed(1)}px`;
+    });
   };
 
   const openShortcutDialog = (index) => {
@@ -451,9 +557,53 @@
     if (shortcutUrl) shortcutUrl.value = site ? site.url : '';
     if (shortcutError) shortcutError.hidden = true;
     if (shortcutDelete) shortcutDelete.hidden = !site;
+    editingIcon = site && site.icon ? site.icon : '';
+    updateIconPreview(editingIcon || (site ? faviconFor(site.url) : ''));
     shortcutDialog.showModal();
     shortcutName?.focus();
   };
+
+  const updateIconPreview = (src) => {
+    if (!shortcutIconPreview) return;
+    if (src) shortcutIconPreview.src = src;
+    else shortcutIconPreview.removeAttribute('src');
+  };
+
+  shortcutUrl?.addEventListener('input', () => {
+    if (editingIcon) return;
+    const url = normaliseUrl(shortcutUrl.value);
+    updateIconPreview(url ? faviconFor(url) : '');
+  });
+
+  shortcutIconReset?.addEventListener('click', async () => {
+    editingIcon = '';
+    const url = normaliseUrl(shortcutUrl?.value);
+    updateIconPreview(url ? faviconFor(url) : '');
+    shortcutIconInput.value = '';
+  });
+
+  shortcutIconInput?.addEventListener('change', async () => {
+    const file = shortcutIconInput.files && shortcutIconInput.files[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    try {
+      const bitmap = await createImageBitmap(file);
+      const canvas = document.createElement('canvas');
+      canvas.width = 64;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      const scale = Math.min(56 / bitmap.width, 56 / bitmap.height);
+      const width = Math.max(1, Math.round(bitmap.width * scale));
+      const height = Math.max(1, Math.round(bitmap.height * scale));
+      ctx.drawImage(bitmap, Math.round((64 - width) / 2), Math.round((64 - height) / 2), width, height);
+      bitmap.close();
+      editingIcon = canvas.toDataURL('image/png');
+      updateIconPreview(editingIcon);
+    } catch (err) {
+      console.warn('[lattice] icon import failed', err);
+    } finally {
+      shortcutIconInput.value = '';
+    }
+  });
 
   shortcutForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -465,6 +615,7 @@
     }
     const title = (shortcutName?.value || '').trim() || hostOf(url) || url;
     const entry = { title: title.slice(0, 60), url };
+    if (editingIcon) entry.icon = editingIcon;
 
     if (editingShortcutIndex >= 0) shortcutsList[editingShortcutIndex] = entry;
     else if (shortcutsList.length < MAX_SHORTCUTS) shortcutsList.push(entry);
@@ -488,6 +639,7 @@
   });
   shortcutDialog?.addEventListener('close', () => {
     editingShortcutIndex = -1;
+    editingIcon = '';
   });
 
   /* ------------------------------- wall ---------------------------------- */
