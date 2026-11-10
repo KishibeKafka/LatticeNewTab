@@ -39,7 +39,6 @@
   --tile-radius: 0px;
   --bg-blur: 0px;
   --dim: 0;
-  --grain-opacity: 0;
 
   --font-display: "Google Sans", "Product Sans", "PingFang SC", "Microsoft YaHei",
     "Noto Sans SC", "Segoe UI Variable Display", "Segoe UI", system-ui, "Helvetica Neue",
@@ -221,16 +220,6 @@ body.is-panning .tile {
   inset: 0;
   background: linear-gradient(180deg, #ffffff 0%, #f7f8fa 45%, #ffffff 100%);
   opacity: var(--dim);
-  transition: opacity 0.3s linear;
-}
-
-.atmosphere__grain {
-  position: absolute;
-  inset: -50%;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
-  background-size: 180px 180px;
-  opacity: var(--grain-opacity);
-  mix-blend-mode: normal;
   transition: opacity 0.3s linear;
 }
 

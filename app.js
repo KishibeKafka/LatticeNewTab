@@ -19,7 +19,6 @@
   const DEFAULTS = {
     dim: 0,
     blur: 0,
-    grain: false,
     source: 'curated',
     collection: 'classic',
     language: 'auto',
@@ -792,7 +791,6 @@
 
     root.style.setProperty('--bg-blur', `${settings.blur}px`);
     root.style.setProperty('--dim', String(settings.dim / 100));
-    root.style.setProperty('--grain-opacity', settings.grain ? '0.22' : '0');
 
     for (const id of Object.keys(RANGES)) {
       const input = $(id);
@@ -804,9 +802,6 @@
     }
 
     syncSeg('lang-seg', settings.language);
-
-    const grainToggle = $('grain');
-    if (grainToggle) grainToggle.checked = settings.grain;
 
     document.querySelectorAll('.chip[data-collection]').forEach((chip) => {
       chip.classList.toggle(
@@ -851,11 +846,6 @@
   };
 
   bindSeg('lang-seg', (value) => applySettings({ language: value }));
-
-  const grainToggle = $('grain');
-  grainToggle?.addEventListener('change', () =>
-    applySettings({ grain: grainToggle.checked })
-  );
 
   document.querySelectorAll('.src-tab').forEach((tab) => {
     tab.addEventListener('click', () => activateTab(tab.dataset.tab));

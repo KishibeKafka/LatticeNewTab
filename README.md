@@ -74,7 +74,7 @@ expansion that re-gears only the block you clicked. English / 中文.
 | Group | Controls |
 | ----- | -------- |
 | Background | Upload · URLs · Explore |
-| Atmosphere | Wash · Blur · Film grain |
+| Atmosphere | Wash · Blur |
 | Language | Auto · English · 中文 |
 
 ## Layout
