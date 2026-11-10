@@ -1,42 +1,23 @@
 /**
- * collage.js — wall renderer (Stage 2 preview)
+ * collage.js — the wall engine.
  *
- * Stage 2 renders a jittered, overlapping album-art wall from a temporary
- * demo pool so the HTML/CSS shell can be evaluated in the browser.
- * Stage 3 replaces the pool + layout with the real packing engine
- * (uploads, URLs, curated sets, storage persistence).
+ * Builds a seamless, full-bleed photo wall:
+ *   rows of photos are packed edge-to-edge, each row is scaled so it spans
+ *   the viewport exactly, tiles are over-sized by a few pixels so neighbours
+ *   overlap, and every tile gets a small seeded rotation.
+ *
+ * Public API (window.LatticeCollage):
+ *   render({ images, count, tilt, gap, shape, seed })
+ *   tileCount()
  */
 (() => {
   'use strict';
 
-  /* ------------------------------ demo pool ------------------------------ */
+  const wall = document.getElementById('collage-wall');
+  const collage = document.getElementById('collage');
 
-  const DEMO_POOL = [
-    'https://picsum.photos/seed/lattice-01/720/900',
-    'https://picsum.photos/seed/lattice-02/900/900',
-    'https://picsum.photos/seed/lattice-03/900/680',
-    'https://picsum.photos/seed/lattice-04/700/940',
-    'https://picsum.photos/seed/lattice-05/900/720',
-    'https://picsum.photos/seed/lattice-06/760/760',
-    'https://picsum.photos/seed/lattice-07/880/620',
-    'https://picsum.photos/seed/lattice-08/720/1000',
-    'https://picsum.photos/seed/lattice-09/940/700',
-    'https://picsum.photos/seed/lattice-10/800/800',
-    'https://picsum.photos/seed/lattice-11/700/880',
-    'https://picsum.photos/seed/lattice-12/900/640',
-    'https://picsum.photos/seed/lattice-13/760/980',
-    'https://picsum.photos/seed/lattice-14/860/860',
-    'https://picsum.photos/seed/lattice-15/920/700',
-    'https://picsum.photos/seed/lattice-16/720/940',
-    'https://picsum.photos/seed/lattice-17/880/660',
-    'https://picsum.photos/seed/lattice-18/780/780',
-    'https://picsum.photos/seed/lattice-19/700/900',
-    'https://picsum.photos/seed/lattice-20/940/720',
-  ];
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
-  /* ------------------------------- helpers ------------------------------- */
-
-  /** Deterministic PRNG so a given wall does not reshuffle on every resize. */
   const mulberry32 = (seed) => () => {
     seed |= 0;
     seed = (seed + 0x6d2b79f5) | 0;
@@ -45,159 +26,174 @@
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 
-  const ASPECTS = {
-    mixed: [
-      [3, 4], [4, 3], [1, 1], [2, 3], [4, 5], [5, 4], [3, 2], [5, 7],
-    ],
-    square: [[1, 1]],
-    portrait: [[3, 4], [2, 3], [4, 5], [5, 7]],
+  const ASPECT_LIMITS = {
+    mixed: [0.6, 1.75],
+    square: [1, 1],
+    portrait: [0.62, 0.86],
   };
 
-  const state = {
-    count: 32,
-    tilt: 2,
-    gap: 14,
-    radius: 10,
-    shape: 'mixed',
-    seed: 7,
+  let lastOptions = null;
+  let rendered = 0;
+
+  const aspectFor = (image, shape, rand) => {
+    const [min, max] = ASPECT_LIMITS[shape] || ASPECT_LIMITS.mixed;
+    const natural = image && image.w && image.h ? image.w / image.h : 1;
+    if (min === max) return min;
+    // nudge the natural ratio so rows stay varied but not extreme
+    return clamp(natural * (0.94 + rand() * 0.12), min, max);
   };
 
-  let order = DEMO_POOL.slice();
-  let currentOptions = { ...state };
-
-  /* ------------------------------- rendering ----------------------------- */
-
-  const frame = document.getElementById('collage-wall');
-
-  const buildTile = (src, rect, rotation, delay, z) => {
+  const makeTile = (image, rect, rotation, delay, z, hue) => {
     const tile = document.createElement('figure');
     tile.className = 'tile is-entering';
-    tile.style.left = `${rect.x}px`;
-    tile.style.top = `${rect.y}px`;
-    tile.style.width = `${rect.w}px`;
-    tile.style.height = `${rect.h}px`;
-    tile.style.setProperty('--rot', `${rotation.toFixed(2)}deg`);
-    tile.style.setProperty('--delay', `${delay}ms`);
+    tile.style.left = `${rect.x.toFixed(1)}px`;
+    tile.style.top = `${rect.y.toFixed(1)}px`;
+    tile.style.width = `${rect.w.toFixed(1)}px`;
+    tile.style.height = `${rect.h.toFixed(1)}px`;
     tile.style.zIndex = String(z);
+    tile.style.setProperty('--hue', String(hue));
+    tile.style.setProperty('--rot', `${rotation.toFixed(2)}deg`);
+    tile.style.setProperty('--delay', `${Math.round(delay)}ms`);
 
-    const inner = document.createElement('div');
-    inner.className = 'tile__frame';
+    const frame = document.createElement('div');
+    frame.className = 'tile__frame';
 
     const img = document.createElement('img');
     img.className = 'tile__img';
-    img.loading = 'lazy';
+    img.alt = '';
     img.decoding = 'async';
     img.draggable = false;
-    img.alt = '';
+    img.loading = z > 2 ? 'lazy' : 'eager';
     img.addEventListener('load', () => img.classList.add('is-loaded'), { once: true });
-    img.src = src;
+    img.addEventListener(
+      'error',
+      () => tile.classList.add('is-failed'),
+      { once: true }
+    );
+    img.src = image.src;
 
-    inner.appendChild(img);
-    tile.appendChild(inner);
+    frame.appendChild(img);
+    tile.appendChild(frame);
     return tile;
   };
 
   const render = (options = {}) => {
-    const opts = { ...state, ...options };
-    currentOptions = opts;
-    Object.assign(state, options);
+    if (!wall) return 0;
 
-    if (!frame) return;
+    const images = Array.isArray(options.images) ? options.images.filter((i) => i && i.src) : [];
+    lastOptions = { ...options, images };
+
+    if (!images.length) {
+      wall.replaceChildren();
+      rendered = 0;
+      collage?.classList.add('is-empty');
+      return 0;
+    }
+    collage?.classList.remove('is-empty');
 
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const count = Math.max(1, Math.round(opts.count));
-    const gap = opts.gap;
+    const target = clamp(Math.round(options.count || 28), 1, 120);
+    const gap = clamp(Math.round(options.gap ?? 12), 0, 60);
+    const tilt = clamp(Number(options.tilt) || 0, 0, 15);
+    const shape = options.shape || 'mixed';
+    const seed = Math.round(options.seed ?? 1);
 
-    const cols = Math.max(2, Math.round(Math.sqrt((count * vw) / vh)));
-    const rows = Math.max(2, Math.ceil(count / cols));
+    const rand = mulberry32(seed);
+    const bleed = 48;
 
-    // Cells bleed past the viewport so the wall never shows a hard edge.
-    const bleed = 34;
-    const cellH = (vh + bleed * 2) / rows;
+    // Row count tracks the viewport shape so tiles stay roughly square-ish
+    // regardless of how many photos the slider asks for.
+    let rows = clamp(Math.round(Math.sqrt((target * vh) / vw)), 2, 9);
+    const totalW = vw + bleed * 2;
+    const totalH = vh + bleed * 2;
+    const rowGap = gap;
+    let rowH = (totalH - rowGap * (rows - 1)) / rows;
+    while (rowH < 90 && rows > 2) {
+      rows -= 1;
+      rowH = (totalH - rowGap * (rows - 1)) / rows;
+    }
 
-    const rand = mulberry32(opts.seed);
-    const aspects = ASPECTS[opts.shape] || ASPECTS.mixed;
+    // Shuffle the pool per render so "Shuffle" really changes the wall.
+    const order = images.slice();
+    for (let i = order.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(rand() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
 
+    const overlap = Math.min(gap * 0.35, 6);
     const frag = document.createDocumentFragment();
-    let index = 0;
+    let cursor = 0;
+    let count = 0;
 
     for (let row = 0; row < rows; row += 1) {
-      const remaining = count - index;
-      const colsInRow = Math.min(cols, remaining);
-      if (colsInRow <= 0) break;
-      const rowCellW = (vw + bleed * 2) / colsInRow;
+      const picked = [];
+      let sum = 0;
+      let guard = 0;
 
-      for (let col = 0; col < colsInRow; col += 1) {
-        const [aw, ah] = aspects[Math.floor(rand() * aspects.length)];
+      // Grow the row until it is at least wide enough to span the viewport.
+      while (sum < totalW && guard < 80) {
+        const image = order[cursor % order.length];
+        const aspect = aspectFor(image, shape, rand);
+        picked.push({ image, aspect });
+        sum += rowH * aspect;
+        cursor += 1;
+        guard += 1;
+        if (picked.length > 30) break;
+      }
 
-        // Start from the cell height, then guarantee the tile covers the cell
-        // in both axes so the wall never shows dark gutters.
-        let h = cellH * (1.04 + rand() * 0.2);
-        let w = h * (aw / ah);
-        if (w < rowCellW * 0.96) {
-          w = rowCellW * 0.96;
-          h = w * (ah / aw);
-        }
+      while (sum > totalW * 1.9 && picked.length > 2) {
+        const dropped = picked.pop();
+        sum -= rowH * dropped.aspect;
+      }
 
-        const cx = -bleed + rowCellW * (col + 0.5) + (rand() - 0.5) * gap * 0.8;
-        const cy = -bleed + cellH * (row + 0.5) + (rand() - 0.5) * gap * 0.8;
+      const gaps = rowGap * (picked.length - 1);
+      const scale = (totalW - gaps) / sum;
+      const y = -bleed + row * (rowH + rowGap);
+      let x = -bleed;
 
-        const rotation = (rand() * 2 - 1) * opts.tilt;
-        const delay = Math.min(900, row * 55 + col * 30 + rand() * 60);
+      for (let col = 0; col < picked.length; col += 1) {
+        const { image, aspect } = picked[col];
+        const width = rowH * aspect * scale;
+        const rotation = (rand() * 2 - 1) * tilt;
+        const delay = row * 70 + col * 24 + rand() * 50;
 
-        const src = order[index % order.length];
         frag.appendChild(
-          buildTile(src, { x: cx - w / 2, y: cy - h / 2, w, h }, rotation, delay, rows - row)
+          makeTile(
+            image,
+            {
+              x: x - overlap,
+              y: y - overlap,
+              w: width + overlap * 2,
+              h: rowH + overlap * 2,
+            },
+            rotation,
+            Math.min(1000, delay),
+            rows - row,
+            Math.round(rand() * 360)
+          )
         );
-        index += 1;
+
+        x += width + rowGap;
+        count += 1;
       }
     }
 
-    frame.replaceChildren(frag);
-
-    // Document-level metadata used by the HUD.
-    const meta = document.getElementById('wall-meta');
-    if (meta) meta.textContent = `${count} tiles · ${opts.shape}`;
+    wall.replaceChildren(frag);
+    rendered = count;
+    return count;
   };
-
-  const shuffle = () => {
-    for (let i = order.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [order[i], order[j]] = [order[j], order[i]];
-    }
-    state.seed = Math.floor(Math.random() * 100000);
-    render({ ...currentOptions, seed: state.seed });
-  };
-
-  /* -------------------------------- public ------------------------------- */
 
   window.LatticeCollage = {
     render,
-    shuffle,
-    poolSize: () => order.length,
-    pool: () => order,
+    tileCount: () => rendered,
   };
-
-  // First paint: keep the lattice loader visible until the first frame lands.
-  const start = () => {
-    const collage = document.getElementById('collage');
-    if (collage) collage.classList.add('is-empty');
-    requestAnimationFrame(() => {
-      render(state);
-      requestAnimationFrame(() => collage && collage.classList.remove('is-empty'));
-    });
-  };
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', start, { once: true });
-  } else {
-    start();
-  }
 
   let resizeTimer = 0;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => render(currentOptions), 200);
+    resizeTimer = setTimeout(() => {
+      if (lastOptions) render(lastOptions);
+    }, 180);
   });
 })();
