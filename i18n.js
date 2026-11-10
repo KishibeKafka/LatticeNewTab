@@ -21,6 +21,7 @@
       'action.clearLibrary': 'Remove all photos',
       'action.shuffle': 'Shuffle',
       'action.removePhoto': 'Remove {name}',
+      'shortcuts.label': 'Shortcuts',
 
       'shortcut.upload': 'Upload',
       'shortcut.url': 'Add URL',
@@ -146,6 +147,7 @@
       'action.clearLibrary': '移除全部照片',
       'action.shuffle': '换一批',
       'action.removePhoto': '移除 {name}',
+      'shortcuts.label': '快捷方式',
 
       'shortcut.upload': '上传',
       'shortcut.url': '加链接',

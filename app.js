@@ -34,6 +34,7 @@
 
   let settings = { ...DEFAULTS };
   let wallSeed = Math.floor(Math.random() * 1e6);
+  let shortcutsList = [];
   let toastTimer = 0;
   let appliedLanguage = null;
 
@@ -239,6 +240,71 @@
 
   collageEl?.addEventListener('pointerup', endPan);
   collageEl?.addEventListener('pointercancel', endPan);
+
+  /* ----------------------------- shortcuts -------------------------------- */
+
+  const shortcutsEl = $('shortcuts');
+
+  const faviconFor = (url) => {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
+        return chrome.runtime.getURL(`/_favicon/?pageUrl=${encodeURIComponent(url)}&size=64`);
+      }
+    } catch (err) {
+      /* fall through */
+    }
+    try {
+      const host = new URL(url).hostname;
+      return `https://www.google.com/s2/favicons?domain=${host}&sz=64`;
+    } catch (err) {
+      return '';
+    }
+  };
+
+  const openShortcut = (url) => {
+    if (!url || !/^https?:\/\//i.test(url)) return;
+    window.location.href = url;
+  };
+
+  const renderShortcuts = () => {
+    if (!shortcutsEl) return;
+    shortcutsEl.replaceChildren(
+      ...shortcutsList.map((site) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'shortcut';
+        button.title = site.title;
+        button.setAttribute('aria-label', site.title);
+
+        const tile = document.createElement('span');
+        tile.className = 'shortcut__tile';
+
+        const letter = document.createElement('span');
+        letter.className = 'shortcut__letter';
+        letter.textContent = (site.title || '?').trim().charAt(0).toUpperCase() || '?';
+
+        const icon = document.createElement('img');
+        icon.className = 'shortcut__icon';
+        icon.alt = '';
+        icon.decoding = 'async';
+        icon.src = faviconFor(site.url);
+        icon.addEventListener('error', () => icon.remove(), { once: true });
+
+        tile.appendChild(letter);
+        tile.appendChild(icon);
+
+        const label = document.createElement('span');
+        label.className = 'shortcut__label';
+        label.textContent = site.title;
+
+        button.appendChild(tile);
+        button.appendChild(label);
+        button.addEventListener('click', () => openShortcut(site.url));
+        return button;
+      })
+    );
+    shortcutsEl.hidden = shortcutsList.length === 0;
+  };
 
   /* ------------------------------- wall ---------------------------------- */
 
@@ -737,7 +803,12 @@
 
   const boot = async () => {
     try {
-      const [saved] = await Promise.all([store.get(SETTINGS_KEY), library.load()]);
+      const [saved, , shortcuts] = await Promise.all([
+        store.get(SETTINGS_KEY),
+        library.load(),
+        window.LatticeShortcuts ? window.LatticeShortcuts.load() : Promise.resolve([]),
+      ]);
+      shortcutsList = shortcuts || [];
       settings = sanitize(saved);
       if (settings.source === 'library' && library.counts().total === 0) {
         settings.source = 'curated';
@@ -746,6 +817,7 @@
       buildChips();
       syncControls();
       refreshLibraryUI();
+      renderShortcuts();
       applyCamera();
         renderWall();
     } catch (err) {

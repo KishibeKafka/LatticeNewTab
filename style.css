@@ -240,6 +240,125 @@ body.is-panning .tile {
   background: radial-gradient(130% 110% at 50% 45%, transparent 55%, rgba(24, 26, 33, 0.18) 100%);
 }
 
+/* ── Shortcuts row ─────────────────────────────────────────────────────── */
+
+.shortcuts {
+  position: fixed;
+  left: 50%;
+  bottom: clamp(16px, 4vh, 34px);
+  z-index: 15;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: clamp(10px, 1.5vw, 20px);
+  width: min(960px, calc(100vw - 36px));
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
+.shortcuts[hidden] {
+  display: none;
+}
+
+.shortcut {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 72px;
+  color: #fff;
+}
+
+.shortcut__tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.2);
+  transition:
+    transform 0.2s var(--ease-standard),
+    box-shadow 0.2s var(--ease-standard);
+}
+
+.shortcut__icon {
+  position: relative;
+  width: 60%;
+  height: 60%;
+  object-fit: contain;
+  background: #fff;
+}
+
+.shortcut__letter {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #202124;
+  font-size: 21px;
+  font-weight: 600;
+}
+
+.shortcut__label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.2;
+  color: #fff;
+  opacity: 0.95;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65);
+}
+
+.shortcut:hover .shortcut__tile {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+}
+
+.shortcut:active .shortcut__tile {
+  transform: scale(0.96);
+}
+
+.shortcut:focus-visible {
+  outline: none;
+}
+
+.shortcut:focus-visible .shortcut__tile {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 5px var(--blue);
+}
+
+@media (max-width: 640px) {
+  .shortcuts {
+    gap: 10px;
+    bottom: 14px;
+    width: calc(100vw - 24px);
+  }
+
+  .shortcut {
+    width: 62px;
+    gap: 6px;
+  }
+
+  .shortcut__tile {
+    width: 44px;
+    height: 44px;
+    border-radius: 11px;
+  }
+
+  .shortcut__label {
+    font-size: 11px;
+  }
+}
+
 /* ── 5. Settings button, scrim & drawer ────────────────────────────────── */
 
 .settings-btn {
