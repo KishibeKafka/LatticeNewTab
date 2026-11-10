@@ -869,6 +869,11 @@ body.is-drawer-open .drawer {
   margin-top: 8px;
 }
 
+.seg--grid {
+  grid-auto-flow: row;
+  grid-template-columns: repeat(2, 1fr);
+}
+
 .src-tab,
 .seg button {
   padding: 7px 6px;

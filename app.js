@@ -16,10 +16,18 @@
 
   const SETTINGS_KEY = 'lattice:settings';
 
+  const ENGINES = {
+    google: { labelKey: 'engine.google', url: 'https://www.google.com/search?q=' },
+    bing: { labelKey: 'engine.bing', url: 'https://www.bing.com/search?q=' },
+    duckduckgo: { labelKey: 'engine.duckduckgo', url: 'https://duckduckgo.com/?q=' },
+    baidu: { labelKey: 'engine.baidu', url: 'https://www.baidu.com/s?wd=' },
+  };
+
   const DEFAULTS = {
     dim: 0,
     blur: 0,
     theme: 'auto',
+    engine: 'google',
     source: 'curated',
     collection: 'classic',
     language: 'auto',
@@ -679,7 +687,8 @@
       window.location.href = `https://${value}`;
       return;
     }
-    window.location.href = `https://www.google.com/search?q=${encodeURIComponent(value)}`;
+    const engine = ENGINES[settings.engine] || ENGINES.google;
+    window.location.href = engine.url + encodeURIComponent(value);
   };
 
   searchFormEl?.addEventListener('submit', (event) => {
@@ -928,10 +937,16 @@
 
     syncSeg('lang-seg', settings.language);
     syncSeg('theme-seg', settings.theme);
+    syncSeg('engine-seg', settings.engine);
     applyTheme();
 
     if (searchInputEl) {
-      searchInputEl.placeholder = t('search.placeholder', { engine: 'Google' });
+      const engine = ENGINES[settings.engine] || ENGINES.google;
+      const placeholderKey =
+        settings.engine === 'baidu' && i18n.locale().startsWith('zh')
+          ? 'search.placeholderBaidu'
+          : 'search.placeholder';
+      searchInputEl.placeholder = t(placeholderKey, { engine: t(engine.labelKey) });
       searchInputEl.setAttribute('aria-label', t('search.inputAria'));
     }
 
@@ -979,6 +994,7 @@
 
   bindSeg('lang-seg', (value) => applySettings({ language: value }));
   bindSeg('theme-seg', (value) => applySettings({ theme: value }));
+  bindSeg('engine-seg', (value) => applySettings({ engine: value }));
 
   document.querySelectorAll('.src-tab').forEach((tab) => {
     tab.addEventListener('click', () => activateTab(tab.dataset.tab));
@@ -1142,6 +1158,7 @@
       source,
       collection: currentCollection(),
       language: settings.language,
+      engine: settings.engine,
     };
     applySettings({}, { immediateSave: true });
     refreshLibraryUI();
@@ -1214,6 +1231,8 @@
         if (['auto', 'en', 'zh'].includes(value)) clean[key] = value;
       } else if (key === 'theme') {
         if (['auto', 'light', 'dark'].includes(value)) clean[key] = value;
+      } else if (key === 'engine') {
+        if (ENGINES[value]) clean[key] = value;
       }
     }
     return clean;

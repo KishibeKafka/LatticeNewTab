@@ -31,6 +31,7 @@ expansion that re-gears only the block you clicked. English / 中文.
 | 12 | Shortcut row, drag reorder, custom icons | ✅ |
 | 13 | Auto / Light / Dark appearance | ✅ |
 | 14 | Chrome-style search beside the centre photo | ✅ |
+| 15 | Search engine picker (Google · Bing · DuckDuckGo · Baidu) | ✅ |
 
 ## Features
 
@@ -53,8 +54,10 @@ expansion that re-gears only the block you clicked. English / 中文.
 - **Chrome-style search** — a rounded white (or dark in night mode) search pill
   with a magnifier, sized like Chrome's new-tab field (584 × 48). It floats just
   above the expanded photo — or below it when there is more room there — and
-  follows the card without ever covering it. Type a Google query or paste a URL
-  and press Enter; `/` focuses the field.
+  follows the card without ever covering it. Type a query or paste a URL and
+  press Enter; `/` focuses the field. The engine is chosen in Customize —
+  Google, Bing, DuckDuckGo or Baidu — and both the placeholder and Enter
+  searches follow it.
 - **Smart framing** — artwork fills the card's gear with `object-fit: cover`
   and a focus point (`object-position`). The focus point comes from the
   browser's `FaceDetector` when available and falls back to centre; the
@@ -90,6 +93,7 @@ expansion that re-gears only the block you clicked. English / 中文.
 | Background | Upload · URLs · Explore |
 | Atmosphere | Wash · Blur |
 | Appearance | Auto · Light · Dark |
+| Search | Google · Bing · DuckDuckGo · 百度 |
 | Language | Auto · English · 中文 |
 
 ## Layout
