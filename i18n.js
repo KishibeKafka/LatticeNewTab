@@ -128,7 +128,7 @@
       'lightbox.counter': '{i} of {total}',
       'lightbox.open': 'Open photo',
       'collage.label': 'Endless photo wall',
-      'wall.note': 'Drag to explore the endless wall · click a photo to enlarge it in the centre and reflow its surroundings.',
+      'wall.note': 'Drag to explore the endless wall · click a photo to magnify it in place; neighbours resize to make room.',
     },
 
     zh: {

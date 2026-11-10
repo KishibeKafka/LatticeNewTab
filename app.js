@@ -254,30 +254,34 @@
       return;
     }
     if (selectedIndex >= pool.length) selectedIndex = 0;
-    engine.render({
+    const center = engine.render({
       images: decorate(pool, label),
       selected: selectedIndex,
       seed: wallSeed,
       focus: viewCenterWorld(),
     });
+    centerOn(center);
+  };
+
+  const centerOn = (point, animate = false) => {
+    if (!point) return;
+    const target = {
+      x: window.innerWidth / 2 - point.x,
+      y: window.innerHeight / 2 - point.y,
+    };
+    if (animate) {
+      animateCamera(target, 650);
+    } else {
+      camera.x = target.x;
+      camera.y = target.y;
+      engine.setCamera(camera.x, camera.y);
+    }
   };
 
   const selectTile = (tile) => {
-    if (!tile || tile.dataset.center === '1') return;
-    const index = Number(tile.dataset.index);
-    if (!Number.isInteger(index) || index === selectedIndex) return;
-
-    const focus = {
-      x: tile.offsetLeft + tile.offsetWidth / 2,
-      y: tile.offsetTop + tile.offsetHeight / 2,
-    };
-
-    selectedIndex = index;
-    engine.select({ selected: index, focus });
-    animateCamera(
-      { x: window.innerWidth / 2 - focus.x, y: window.innerHeight / 2 - focus.y },
-      650
-    );
+    if (!tile) return;
+    const center = engine.selectTile(tile);
+    if (center) centerOn(center, true);
   };
 
   $('collage-wall')?.addEventListener('keydown', (event) => {

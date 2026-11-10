@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "Lattice — Photo Collage New Tab",
   "short_name": "Lattice",
-  "version": "0.9.0",
-  "description": "A draggable, gap-free photo wall for your new tab. Click a photo to enlarge it in the centre while its surroundings reflow; drag on for endless mosaic.",
+  "version": "0.10.0",
+  "description": "A draggable photo wall for your new tab. Click a photo to magnify it in place while its neighbours resize; every photo is shown complete.",
   "minimum_chrome_version": "116",
   "chrome_url_overrides": {
     "newtab": "newtab.html"
