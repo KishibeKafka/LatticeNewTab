@@ -45,7 +45,6 @@
       'drawer.eyebrow': 'Appearance',
       'drawer.title': 'Customize',
       'group.background': 'Background',
-      'group.wall': 'Wall',
       'group.atmosphere': 'Atmosphere',
       'group.appearance': 'Appearance',
       'group.search': 'Search engine',
@@ -105,7 +104,6 @@
       'engine.bing': 'Bing',
       'engine.duckduckgo': 'DuckDuckGo',
       'engine.baidu': 'Baidu',
-      'search.engineAria': 'Search engine',
       'search.inputAria': 'Search',
       'drawer.aria': 'Customize panel',
 
@@ -192,7 +190,6 @@
       'drawer.eyebrow': '外观',
       'drawer.title': '自定义',
       'group.background': '背景',
-      'group.wall': '拼贴',
       'group.atmosphere': '氛围',
       'group.appearance': '外观',
       'group.search': '搜索引擎',
@@ -252,7 +249,6 @@
       'engine.bing': 'Bing',
       'engine.duckduckgo': 'DuckDuckGo',
       'engine.baidu': '百度',
-      'search.engineAria': '搜索引擎',
       'search.inputAria': '搜索',
       'drawer.aria': '自定义面板',
 

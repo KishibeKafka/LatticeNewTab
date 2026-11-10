@@ -43,7 +43,7 @@
 
   const BLOCK_W = COLS * PITCH;
   const BLOCK_H = ROWS * PITCH;
-  const MAX_TILES = 400;
+  const MAX_TILES = 320;
 
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
@@ -353,12 +353,22 @@
         state.focusPoints.set(photoIndex, { x: 50, y: 50 });
       })
       .finally(() => {
+        probe.removeAttribute('src');
         state.pendingFocus.delete(photoIndex);
         applyFocus(photoIndex);
       });
   };
 
   /* ── tiles ── */
+
+  const releaseTile = (entry) => {
+    const img = entry.el.querySelector('.tile__img');
+    if (img) {
+      img.removeAttribute('data-thumb');
+      img.removeAttribute('src');
+    }
+    entry.el.remove();
+  };
 
   const createTile = (col, row, slot, photoIndex, rect) => {
     const image = state.images[photoIndex] || state.images[0];
@@ -389,11 +399,22 @@
     img.decoding = 'async';
     img.draggable = false;
     img.loading = 'lazy';
+    img.dataset.thumb = image.src;
     img.src = image.src;
     const point = state.focusPoints.get(photoIndex) || { x: 50, y: 50 };
     img.style.objectPosition = `${point.x}% ${point.y}%`;
-    img.addEventListener('load', () => img.classList.add('is-loaded'), { once: true });
-    img.addEventListener('error', () => el.classList.add('is-failed'), { once: true });
+    img.addEventListener('load', () => {
+      el.classList.remove('is-failed');
+      img.classList.add('is-loaded');
+    });
+    img.addEventListener('error', () => {
+      const thumb = img.dataset.thumb;
+      if (thumb && img.getAttribute('src') !== thumb) {
+        img.src = thumb;
+        return;
+      }
+      el.classList.add('is-failed');
+    });
 
     el.setAttribute('aria-label', image.aria || image.label || '');
 
@@ -422,10 +443,9 @@
     el.setAttribute('aria-label', image.aria || image.label || '');
 
     const img = el.querySelector('.tile__img');
-    if (img.getAttribute('src') !== image.src) {
-      img.classList.remove('is-loaded');
-      img.src = image.src;
-    }
+    const desired = isExpanded && image.full ? image.full : image.src;
+    img.loading = isExpanded ? 'eager' : 'lazy';
+    if (img.getAttribute('src') !== desired) img.src = desired;
     const point = state.focusPoints.get(photoIndex) || { x: 50, y: 50 };
     img.style.objectPosition = `${point.x}% ${point.y}%`;
     img.style.objectFit = isExpanded ? 'contain' : 'cover';
@@ -471,7 +491,7 @@
     const top = -y / scale;
     const right = (window.innerWidth - x) / scale;
     const bottom = (window.innerHeight - y) / scale;
-    const overscan = 420;
+    const overscan = 320;
 
     const colFrom = Math.floor((left - overscan) / BLOCK_W);
     const colTo = Math.floor((right + overscan) / BLOCK_W);
@@ -523,7 +543,7 @@
 
     for (const [key, entry] of state.tiles) {
       if (needed.has(key)) continue;
-      entry.el.remove();
+      releaseTile(entry);
       state.tiles.delete(key);
     }
 
@@ -547,7 +567,7 @@
     state.focusPoints.clear();
     state.pendingFocus.clear();
 
-    for (const entry of state.tiles.values()) entry.el.remove();
+    for (const entry of state.tiles.values()) releaseTile(entry);
     state.tiles.clear();
     reflowCache.clear();
     lastRange = '';

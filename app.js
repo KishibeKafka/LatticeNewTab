@@ -713,7 +713,6 @@
     const cardTop = rect.y * scale + camera.y;
     const cardW = rect.w * scale;
     const cardH = rect.h * scale;
-    const cardRight = cardLeft + cardW;
     const cardBottom = cardTop + cardH;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
@@ -1112,7 +1111,7 @@
         syncControls();
         refreshLibraryUI();
         resetCamera();
-            renderWall();
+        renderWall();
         notify(
           failed
             ? t('toast.addedSkipped', { n: added, failed })
