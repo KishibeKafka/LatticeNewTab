@@ -467,9 +467,9 @@
       });
       wrapper.addEventListener('dragend', () => {
         wrapper.classList.remove('is-dragging');
-        shortcutsEl?.querySelectorAll('.shortcut-wrap.is-drop-target').forEach((el) => {
-          el.classList.remove('is-drop-target');
-        });
+        shortcutsEl
+          ?.querySelectorAll('.shortcut-wrap.is-drop-target')
+          .forEach((el) => el.classList.remove('is-drop-target', 'is-drop-before', 'is-drop-after'));
         draggedShortcut = -1;
       });
       wrapper.addEventListener('dragover', (event) => {
@@ -477,11 +477,17 @@
         event.preventDefault();
         event.dataTransfer.dropEffect = 'move';
         shortcutsEl?.querySelectorAll('.shortcut-wrap.is-drop-target').forEach((el) => {
-          if (el !== wrapper) el.classList.remove('is-drop-target');
+          if (el !== wrapper) {
+            el.classList.remove('is-drop-target', 'is-drop-before', 'is-drop-after');
+          }
         });
         wrapper.classList.add('is-drop-target');
+        wrapper.classList.toggle('is-drop-after', draggedShortcut < index);
+        wrapper.classList.toggle('is-drop-before', draggedShortcut > index);
       });
-      wrapper.addEventListener('dragleave', () => wrapper.classList.remove('is-drop-target'));
+      wrapper.addEventListener('dragleave', () =>
+        wrapper.classList.remove('is-drop-target', 'is-drop-before', 'is-drop-after')
+      );
       wrapper.addEventListener('drop', (event) => {
         if (!isShortcutDrag(event)) return;
         event.preventDefault();
@@ -497,8 +503,8 @@
         }
         const before = captureShortcutRects();
         const [moved] = shortcutsList.splice(source, 1);
-        const destination = source < index ? index - 1 : index;
-        shortcutsList.splice(destination, 0, moved);
+        // forward drops land after the target, backward drops before it
+        shortcutsList.splice(index, 0, moved);
         suppressShortcutClick = Date.now() + 300;
         draggedShortcut = -1;
         void persistShortcuts();

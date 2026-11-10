@@ -542,6 +542,24 @@ html[data-theme="dark"] .center-search__form:focus-within {
     0 8px 22px rgba(26, 115, 232, 0.35);
 }
 
+.shortcut-wrap.is-drop-target::after {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  top: 4px;
+  bottom: 22px;
+  left: -7px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--blue);
+  box-shadow: 0 0 8px rgba(26, 115, 232, 0.5);
+}
+
+.shortcut-wrap.is-drop-target.is-drop-after::after {
+  right: -7px;
+  left: auto;
+}
+
 .shortcut__remove {
   position: absolute;
   top: -6px;
