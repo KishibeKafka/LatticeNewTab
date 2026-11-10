@@ -1,14 +1,13 @@
 # Lattice
 
-A **draggable, endless photo wall** for your new tab with a spotlight in the
-middle. The wall is a gap-free square-cornered mosaic you can pan forever; one
-photo sits enlarged in the centre, and the photos around it are re-packed to
-fit. Click any photo: the wall glides so that photo reaches the centre, it
-grows, and its neighbourhood reflows around it. **English / 中文.**
+An **infinite, draggable photo wall** for your new tab, rebuilt around the
+Lattice module of [folia-major](https://github.com/chthollyphile/folia-major):
+12-card block templates, viewport culling, a world/camera split, and an
+expansion that re-gears only the block you clicked. English / 中文.
 
 ![Lattice new tab](docs/screenshot.png)
 
-![Another photo selected: the view glides and the surroundings reflow](docs/selected.png)
+![Another card expanded: its block re-gears around it](docs/selected.png)
 
 ![Customize panel](docs/customize.png)
 
@@ -21,36 +20,32 @@ grows, and its neighbourhood reflows around it. **English / 中文.**
 | 3 | Photo library, URL sources, curated sets | ✅ |
 | 4 | Material polish, skeletons, reduced motion | ✅ |
 | 5 | English / 中文 UI with language switch | ✅ |
-| 6 | Gap-free square-cornered wall | ✅ |
-| 7 | Centre spotlight with local reflow | ✅ |
-| 8 | Drag + click-to-centre + local reflow | ✅ |
-| 9 | Complete photos (no crop) and stable swap | ✅ |
-| 10 | No photo ever covers another | ✅ |
-| 11 | Repeated photos behave as independent tiles | ✅ |
+| 6 | Endless draggable wall | ✅ |
+| 7 | Block templates, reflections, viewport culling | ✅ |
+| 8 | 6×6 expansion with local block reflow | ✅ |
+| 9 | Glow / inner stroke / title band, smart framing | ✅ |
 
 ## Features
 
-- **Endless draggable wall** — an infinite, virtualised masonry of columns with
-  varying widths. Photos tile edge to edge, square corners, no gaps, no
-  overlaps. Drag anywhere (with inertia) and new photos stream in.
-- **Nothing is cropped and nothing is covered** — every photo, on the wall and
-  around the centre, is laid out at its own aspect ratio. The magnified photo
-  owns a real slot; rows and columns are re-packed around it so no photo ever
-  sits on top of another.
-- **Spotlight centre** — the selected photo is enlarged to the middle of the
-  screen at its natural aspect ratio. The photos around it are re-packed
-  gaplessly into the space above, below, left and right, forming a local
-  spotlight patch that lives in the world and scrolls with it.
-- **Click to select** — clicking a photo enlarges it, pans the camera so it is
-  centred, and reflows its neighbourhood. The surrounding order is stable:
-  only the clicked photo and the previous centre swap slots, so nearby photos
-  glide and resize slightly instead of flying around. There is no "exit": the
-  wall always has a selected centre.
-- **Drag + select together** — after selecting, keep dragging: the spotlight
-  patch travels with the wall and the plain endless mosaic is revealed beyond
-  it. Click a photo out there and the spotlight re-forms around it.
-- **Square corners, no gutters** — every photo meets its neighbours at right
-  angles.
+- **Block templates, borrowed from folia-major** — a 12×8 block is covered
+  exactly by 12 cards in four base templates, each mirrored in X and Y. The
+  template and reflection follow the block's coordinates, so the field never
+  reads as a plain grid and tile sizes vary naturally.
+- **Endless and virtualised** — blocks repeat over an unbounded world; only
+  blocks inside the viewport plus an overscan are instantiated, capped at 400
+  tiles. Dragging changes the camera offset, not the layout.
+- **Expand to 6×6** — clicking a card expands it to folia's 6×6 gear. The other
+  eleven cards of **that same block** re-gear to cover the remaining area
+  exactly (no gaps, no overlaps); no other block moves. Clicking another card
+  switches the expansion, clicking the open card (or a gap / `Esc`) collapses
+  it.
+- **Camera glide** — the camera pans to the expanded card; the expanded card
+  gets a white focus ring, an inner peach glow and a title band at its lower
+  edge.
+- **Smart framing** — artwork fills the card's gear with `object-fit: cover`
+  and a focus point (`object-position`). The focus point comes from the
+  browser's `FaceDetector` when available and falls back to centre; the
+  mechanism mirrors folia's `cardArtwork` / avatar-focus idea.
 - **Three sources**
   - **Upload** — drop or pick images; downscaled to 1800 px, re-encoded to WebP
     and stored in IndexedDB. Nothing leaves the device.
@@ -58,7 +53,6 @@ grows, and its neighbourhood reflows around it. **English / 中文.**
     is cached by the browser.
   - **Explore** — `Classic` ships with the extension (instant + offline);
     `Editorial`, `Noir`, `Soft focus` and `Wide` stream from Lorem Picsum.
-- **Bilingual** — English and 中文 with `跟随系统 / Auto / English / 中文`.
 
 ## Settings
 
@@ -68,30 +62,20 @@ grows, and its neighbourhood reflows around it. **English / 中文.**
 | Atmosphere | Wash · Blur · Film grain |
 | Language | Auto · English · 中文 |
 
-## How the layout works
+## Layout
 
 ```
-        infinite wall (gap-free masonry, draggable)
-┌──────────────────────────────────────────────────────────────┐
-│                                                              │
-│      ┌──────────────── spotlight patch ──────────────────┐   │
-│      │          row of complete photos (top)             │   │
-│      ├─────────┬────────────────────────┬────────────────┤   │
-│      │ columns │      CENTRE PHOTO      │    columns     │   │
-│      │ (full   │   (natural aspect)     │  (full height) │   │
-│      │  height)│                        │                │   │
-│      ├─────────┴────────────────────────┴────────────────┤   │
-│      │         row of complete photos (bottom)           │   │
-│      └───────────────────────────────────────────────────┘   │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
+┌────────────── 12 × 8 block (one of 4 templates, mirrored) ──────────────┐
+│  2×2 │ 2×2 │      4×3      │ 2×4 │ 2×4 │                                │
+│      │     │               │     │     │                                │
+│ 2×3  │ 2×2 │      4×3      │      4×4      │                            │
+│      │     │               │               │                            │
+│ 2×3  │        6×2          │     (varied gears, exact cover)            │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
-Photos above and below the centre sit in justified rows; photos to the left and
-right sit in columns that stack to exactly the centre's height. Every rectangle
-matches its image's aspect ratio, so nothing is cropped. The patch is anchored
-in world coordinates, so the camera centres the selected photo and dragging
-moves the patch with the wall.
+Clicking any card makes it a 6×6 card and re-tiles the rest of the block around
+it; the expanded card is centred by the camera.
 
 ## Install (unpacked)
 
@@ -108,12 +92,12 @@ directly in a browser: outside the extension `chrome.storage` falls back to
 ```
 manifest.json            MV3 manifest (new tab override, storage)
 newtab.html              collage, settings button, drawer
-style.css                Material tokens, wall, patch, atmosphere, drawer
+style.css                Material tokens, wall, cards, atmosphere, drawer
 i18n.js                  English/中文 dictionary + DOM applier
 store.js                 chrome.storage.local ⇄ localStorage adapter
 library.js               IndexedDB library, upload pipeline, curated sets
-collage.js               endless wall + spotlight patch + camera
-app.js                   panning, selection, drawer, sources, persistence
+collage.js               block templates, culling, block reflow, camera
+app.js                   camera input, expansion, drawer, sources, persistence
 assets/defaults/         24 bundled photos (instant, offline)
 icons/                   generated PNG icons (16/32/48/128)
 tools/make-icons.mjs     zero-dependency icon generator
@@ -132,28 +116,22 @@ tools/fetch-defaults.mjs refreshes assets/defaults from Lorem Picsum
 Uploads are never sent anywhere. Network sets and pasted URLs are fetched by
 the browser straight from their host.
 
-## Design tokens
-
-| Token | Purpose |
-| ----- | ------- |
-| `--bg-blur` | Blur applied to the collage |
-| `--dim` | Strength of the white wash over the collage |
-| `--grain-opacity` | Film-grain texture |
-| `--blue` / `--ink-*` | Google Material palette |
-
 ## Shortcuts
 
 | Key | Action |
 | ---- | ------ |
-| `S` | New random wall + centre |
-| `Esc` | Close settings |
+| `S` | New random wall and expanded card |
+| `Enter` | Expand the focused card |
+| `Esc` | Collapse the expanded card / close settings |
 
-## Icons & default photos
+## Credits
 
-```bash
-node tools/make-icons.mjs      # regenerate the extension icons
-node tools/fetch-defaults.mjs  # refresh the bundled photo set
-```
+The block layout system, its four templates and reflections, the 6×6 expansion
+idea and the focus styling are adapted from **folia-major** by
+[chthollyphile](https://github.com/chthollyphile/folia-major)
+(`src/components/wall/blockTemplates.ts`, `layout.ts`,
+`src/components/app/lattice/PosterWall.tsx`). This port implements its own
+reflow solver so the block stays exactly covered when a card expands.
 
 Bundled and curated photos come from [Lorem Picsum](https://picsum.photos),
 which re-hosts photography from [Unsplash](https://unsplash.com) under the

@@ -34,7 +34,6 @@
 
   let settings = { ...DEFAULTS };
   let wallSeed = Math.floor(Math.random() * 1e6);
-  let selectedIndex = 0;
   let toastTimer = 0;
   let appliedLanguage = null;
 
@@ -92,16 +91,30 @@
 
   /* ------------------------------- camera -------------------------------- */
 
-  const camera = { x: 0, y: 0 };
+  const camera = { x: 0, y: 0, scale: 1 };
+  const getScale = () => {
+    const width = window.innerWidth;
+    if (width < 520) return 0.46;
+    if (width < 640) return 0.52;
+    if (width < 1100) return 0.64;
+    return 0.76;
+  };
+
   let camFrame = 0;
   let panFrame = 0;
   let camBusy = false;
   let velocity = { x: 0, y: 0 };
   let drag = null;
+  let lastViewport = { w: window.innerWidth, h: window.innerHeight };
 
-  const applyCamera = () => engine.setCamera(camera.x, camera.y);
+  const applyCamera = () => engine.setCamera(camera.x, camera.y, camera.scale);
 
-  const animateCamera = (target, duration, done) => {
+  const targetForRect = (rect) => ({
+    x: window.innerWidth / 2 - (rect.x + rect.w / 2) * camera.scale,
+    y: window.innerHeight / 2 - (rect.y + rect.h / 2) * camera.scale,
+  });
+
+  const animateCamera = (target, duration = 650) => {
     cancelAnimationFrame(camFrame);
     camBusy = true;
     const from = { x: camera.x, y: camera.y };
@@ -117,11 +130,21 @@
         camFrame = requestAnimationFrame(step);
       } else {
         camBusy = false;
-        if (done) done();
       }
     };
 
     camFrame = requestAnimationFrame(step);
+  };
+
+  const centerOnRect = (rect, animate = true) => {
+    if (!rect) return;
+    const target = targetForRect(rect);
+    if (animate) animateCamera(target, 650);
+    else {
+      camera.x = target.x;
+      camera.y = target.y;
+      applyCamera();
+    }
   };
 
   const resetCamera = () => {
@@ -129,6 +152,7 @@
     cancelAnimationFrame(panFrame);
     camBusy = false;
     velocity = { x: 0, y: 0 };
+    camera.scale = getScale();
     camera.x = 0;
     camera.y = 0;
     applyCamera();
@@ -205,8 +229,9 @@
     drag = null;
     document.body.classList.remove('is-panning');
 
-    if (!moved && tile) {
-      selectTile(tile);
+    if (!moved) {
+      if (tile) selectTile(tile);
+      else engine.collapse();
       return;
     }
     if (Math.hypot(velocity.x, velocity.y) > 0.06) startInertia();
@@ -237,39 +262,21 @@
     return { pool: library.curatedPool(id), label: setLabel(id) };
   };
 
-  const selectRandom = () => {
-    const pool = poolFor().pool;
-    selectedIndex = pool.length ? Math.floor(Math.random() * pool.length) : 0;
-  };
-
-  const viewCenterWorld = () => ({
-    x: window.innerWidth / 2 - camera.x,
-    y: window.innerHeight / 2 - camera.y,
-  });
-
   const renderWall = () => {
     const { pool, label } = poolFor();
-    if (!pool.length) {
-      engine.render({ images: [], selected: 0, seed: wallSeed });
-      return;
-    }
-    if (selectedIndex >= pool.length) selectedIndex = 0;
-    engine.render({
-      images: decorate(pool, label),
-      selected: selectedIndex,
+    camera.scale = getScale();
+    const rect = engine.render({
+      images: pool.length ? decorate(pool, label) : [],
       seed: wallSeed,
-      focus: viewCenterWorld(),
     });
+    if (rect) centerOnRect(rect, false);
+    else applyCamera();
   };
 
   const selectTile = (tile) => {
     if (!tile) return;
-    const center = engine.selectTile(tile);
-    if (!center) return;
-    animateCamera(
-      { x: window.innerWidth / 2 - center.x, y: window.innerHeight / 2 - center.y },
-      650
-    );
+    const rect = engine.expandTile(tile);
+    if (rect) centerOnRect(rect, true);
   };
 
   $('collage-wall')?.addEventListener('keydown', (event) => {
@@ -278,6 +285,31 @@
     if (!tile) return;
     event.preventDefault();
     selectTile(tile);
+  });
+
+  let resizeTimer = 0;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      const old = camera;
+      const ratio = getScale();
+      const worldCenter = {
+        x: (lastViewport.w / 2 - old.x) / old.scale,
+        y: (lastViewport.h / 2 - old.y) / old.scale,
+      };
+      camera.scale = ratio;
+      const rect = engine.activeRect();
+      if (rect) {
+        const target = targetForRect(rect);
+        camera.x = target.x;
+        camera.y = target.y;
+      } else {
+        camera.x = window.innerWidth / 2 - worldCenter.x * ratio;
+        camera.y = window.innerHeight / 2 - worldCenter.y * ratio;
+      }
+      lastViewport = { w: window.innerWidth, h: window.innerHeight };
+      applyCamera();
+    }, 150);
   });
 
   /* --------------------------- library drawer UI -------------------------- */
@@ -343,7 +375,6 @@
     syncControls();
     refreshLibraryUI();
     resetCamera();
-    selectRandom();
     renderWall();
     if (message) notify(message);
   };
@@ -442,7 +473,10 @@
   const applySettings = (partial = {}, options = {}) => {
     settings = { ...settings, ...partial };
     const languageChanged = syncControls();
-    if (languageChanged) refreshLibraryUI();
+    if (languageChanged) {
+      refreshLibraryUI();
+      renderWall();
+    }
     if (options.save !== false) persist(options.immediateSave);
   };
 
@@ -505,8 +539,7 @@
         syncControls();
         refreshLibraryUI();
         resetCamera();
-        selectRandom();
-        renderWall();
+            renderWall();
         notify(
           failed
             ? t('toast.addedSkipped', { n: added, failed })
@@ -579,8 +612,7 @@
       syncControls();
       refreshLibraryUI();
       resetCamera();
-      selectRandom();
-      renderWall();
+        renderWall();
       if (urlInput) urlInput.value = '';
       notify(t('toast.urlAdded'));
     } catch (err) {
@@ -615,8 +647,7 @@
           persist();
           syncControls();
           resetCamera();
-          selectRandom();
-          renderWall();
+                renderWall();
           notify(t('toast.collection', { name: setLabel(set.id) }));
         });
         return chip;
@@ -642,7 +673,6 @@
     applySettings({}, { immediateSave: true });
     refreshLibraryUI();
     resetCamera();
-    selectRandom();
     renderWall();
     notify(t('toast.layoutReset'));
   });
@@ -652,7 +682,6 @@
   const shuffleWall = () => {
     wallSeed = Math.floor(Math.random() * 1e6);
     resetCamera();
-    selectRandom();
     renderWall();
     notify(t('toast.shuffled'));
   };
@@ -666,6 +695,7 @@
     if (event.key === 'Escape') {
       if (isDrawerOpen()) setDrawer(false);
       else if (typing) target.blur();
+      else engine.collapse();
       return;
     }
 
@@ -715,8 +745,7 @@
       syncControls();
       refreshLibraryUI();
       applyCamera();
-      selectRandom();
-      renderWall();
+        renderWall();
     } catch (err) {
       console.error('[lattice] boot failed', err);
       notify(t('toast.bootFailed'));

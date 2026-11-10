@@ -121,7 +121,7 @@ svg {
   inset: 0;
   z-index: 0;
   overflow: hidden;
-  background: #dde0e5;
+  background: #0d0e12;
   cursor: grab;
   touch-action: none;
   filter: blur(var(--bg-blur)) saturate(1.02);
@@ -131,41 +131,23 @@ svg {
 .collage__wall {
   position: absolute;
   inset: 0;
+  transform-origin: 0 0;
+  will-change: transform;
 }
 
 .tile {
   position: absolute;
   margin: 0;
-  border-radius: var(--tile-radius);
+  border-radius: 0;
+  background: #16171c;
   cursor: pointer;
   transition:
-    left 0.62s var(--ease-emphasized),
-    top 0.62s var(--ease-emphasized),
-    width 0.62s var(--ease-emphasized),
-    height 0.62s var(--ease-emphasized),
-    opacity 0.32s var(--ease-standard);
-}
-
-.tile.is-center {
-  cursor: default;
-}
-
-.tile--patch {
-  z-index: 10;
-}
-
-.tile--wall {
-  z-index: 0;
-}
-
-body.is-panning .collage,
-body.is-panning .tile {
-  cursor: grabbing;
-}
-
-.tile.is-leaving {
-  opacity: 0;
-  pointer-events: none;
+    left 0.55s var(--ease-emphasized),
+    top 0.55s var(--ease-emphasized),
+    width 0.55s var(--ease-emphasized),
+    height 0.55s var(--ease-emphasized),
+    box-shadow 0.3s var(--ease-standard),
+    opacity 0.3s var(--ease-standard);
 }
 
 .tile:focus-visible {
@@ -176,28 +158,43 @@ body.is-panning .tile {
   box-shadow: inset 0 0 0 3px var(--blue);
 }
 
+body.is-panning .collage,
+body.is-panning .tile {
+  cursor: grabbing;
+}
+
+.tile.is-expanded {
+  z-index: 30;
+  cursor: default;
+}
+
+.tile.is-expanded .tile__frame {
+  box-shadow:
+    0 36px 90px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 0 0 4px rgba(255, 255, 255, 0.92),
+    0 0 0 5px rgba(0, 0, 0, 0.4),
+    inset 0 0 32px -8px rgba(246, 201, 166, 0.55);
+}
+
 .tile__frame {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  border-radius: inherit;
-  background: linear-gradient(
-    145deg,
-    hsl(var(--hue, 210) 24% 86%),
-    hsl(calc(var(--hue, 210) + 46) 30% 74%)
-  );
+  background: #16171c;
 }
 
 .tile__img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: 50% 50%;
   display: block;
   opacity: 0;
-  transform: scale(1.04);
+  transform: scale(1.03);
   transition:
-    opacity 0.6s var(--ease-standard),
-    transform 1s var(--ease-emphasized);
+    opacity 0.55s var(--ease-standard),
+    transform 0.9s var(--ease-emphasized);
 }
 
 .tile__img.is-loaded {
@@ -209,8 +206,38 @@ body.is-panning .tile {
   display: none;
 }
 
+.tile__caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 26px 20px 16px;
+  background: linear-gradient(0deg, rgba(9, 10, 14, 0.85), rgba(9, 10, 14, 0.42) 58%, transparent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 0.3s var(--ease-standard),
+    transform 0.5s var(--ease-emphasized);
+  pointer-events: none;
+}
+
+.tile.is-expanded .tile__caption {
+  opacity: 1;
+  transform: none;
+  font-size: clamp(15px, 1.5vw, 19px);
+  font-weight: 500;
+  padding-bottom: 22px;
+}
+
 .tile.is-entering .tile__frame {
-  animation: tile-in 0.6s var(--ease-emphasized) both;
+  animation: tile-in 0.5s var(--ease-emphasized) both;
 }
 
 /* ── 4. Atmosphere ─────────────────────────────────────────────────────── */

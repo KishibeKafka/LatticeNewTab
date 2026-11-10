@@ -1,36 +1,49 @@
 /**
- * collage.js — draggable infinite wall + local spotlight patch.
+ * collage.js — infinite "Lattice" wall, adapted from folia-major's Lattice module.
  *
- * Wall: endless gap-free masonry, draggable, virtualised. Every photo keeps its
- * natural aspect ratio, so nothing is cropped.
+ * Mechanics borrowed from chthollyphile/folia-major
+ * (src/components/wall/blockTemplates.ts, layout.ts, blockReflows.ts,
+ * src/components/app/lattice/PosterWall.tsx):
  *
- * Patch: a world-anchored local composition around the selected photo. The
- * centre is enlarged, and the space above/below is filled with full-width rows
- * of complete photos; left/right are filled with columns whose photos stack to
- * exactly the centre height. Photos keep their natural aspect, so they are
- * never cropped.
+ *  - a 12×8 block is covered exactly by 12 cards in four base templates,
+ *    each also mirrored in X/Y; the template follows the block's coordinates,
+ *    so the field never reads as a plain grid;
+ *  - blocks repeat over an unbounded world, and only blocks inside the
+ *    viewport (plus an overscan) are instantiated; tiles are keyed by
+ *    block:slot so camera moves never rebuild them;
+ *  - clicking a card expands it to a 6×6 gear. A precomputed-on-demand reflow
+ *    re-gears the other eleven cards of that same block to cover the rest
+ *    exactly — neighbours change place/size, no other block moves;
+ *  - the camera is a translate+scale of the world and glides to the expanded
+ *    card; the expanded card gets the glow / inner stroke and a title band.
  *
- * The surrounding photo order is stable: selecting a photo only swaps it with
- * the current centre (or appends the old centre), so neighbourhood photos keep
- * their slots and glide to their new rectangles instead of flying around.
+ * Artwork is cropped to the card's gear (cover) with a focus point so the
+ * subject stays in frame, as cardArtwork does in folia.
  *
  * Public API:
- *   render({ images, selected, focus, seed })
- *   select({ selected, focus })
- *   setCamera(x, y)
+ *   render({ images, seed }) -> expanded rect (world) chosen at start
+ *   expandTile(el) -> expanded rect | null (null = collapsed)
+ *   collapse()
+ *   activeRect() -> rect | null
+ *   setCamera(x, y, scale)
+ *   refreshCaptions()
  */
 (() => {
   'use strict';
 
   const wall = document.getElementById('collage-wall');
 
-  const CYCLE = 8;
-  const ITEMS_PER_PERIOD = 7;
-  const PATCH_ROW_WIDTH = 1.5; // × viewport width
-  const ROW_IMAGES = 5;
-  const SIDE_COLUMNS = 3;
-  const COLUMN_IMAGES = 2;
-  const SURROUND_SLOTS = ROW_IMAGES * 2 + SIDE_COLUMNS * COLUMN_IMAGES * 2;
+  const COLS = 12;
+  const ROWS = 8;
+  const CELL = 128;
+  const GAP = 8;
+  const PITCH = CELL + GAP;
+  const SLOTS = 12;
+  const EXPAND = 6;
+
+  const BLOCK_W = COLS * PITCH;
+  const BLOCK_H = ROWS * PITCH;
+  const MAX_TILES = 400;
 
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
@@ -42,146 +55,315 @@
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 
-  const hash = (a, b, seed) => {
-    let h = Math.imul(a, 374761393) ^ Math.imul(b, 668265263) ^ Math.imul(seed, 2246822519);
+  const hash = (a, b, c, seed) => {
+    let h = Math.imul(a, 374761393) ^ Math.imul(b, 668265263) ^ Math.imul(c, 2246822519) ^ Math.imul(seed, 3266489917);
     h = Math.imul(h ^ (h >>> 13), 1274126177);
     return (h ^ (h >>> 16)) >>> 0;
   };
 
+  /* ── templates: each covers the 12×8 block exactly (from folia-major) ── */
+
+  const TEMPLATES = [
+    [
+      { x: 0, y: 0, cols: 3, rows: 2 },
+      { x: 3, y: 0, cols: 6, rows: 4 },
+      { x: 9, y: 0, cols: 3, rows: 2 },
+      { x: 0, y: 2, cols: 3, rows: 2 },
+      { x: 9, y: 2, cols: 3, rows: 4 },
+      { x: 0, y: 4, cols: 4, rows: 4 },
+      { x: 4, y: 4, cols: 2, rows: 2 },
+      { x: 6, y: 4, cols: 3, rows: 2 },
+      { x: 4, y: 6, cols: 2, rows: 2 },
+      { x: 6, y: 6, cols: 2, rows: 2 },
+      { x: 8, y: 6, cols: 2, rows: 2 },
+      { x: 10, y: 6, cols: 2, rows: 2 },
+    ],
+    [
+      { x: 0, y: 0, cols: 2, rows: 3 },
+      { x: 2, y: 0, cols: 2, rows: 3 },
+      { x: 4, y: 0, cols: 2, rows: 3 },
+      { x: 6, y: 0, cols: 6, rows: 4 },
+      { x: 0, y: 3, cols: 6, rows: 2 },
+      { x: 6, y: 4, cols: 2, rows: 4 },
+      { x: 8, y: 4, cols: 2, rows: 4 },
+      { x: 10, y: 4, cols: 2, rows: 2 },
+      { x: 0, y: 5, cols: 2, rows: 3 },
+      { x: 2, y: 5, cols: 2, rows: 3 },
+      { x: 4, y: 5, cols: 2, rows: 3 },
+      { x: 10, y: 6, cols: 2, rows: 2 },
+    ],
+    [
+      { x: 0, y: 0, cols: 6, rows: 4 },
+      { x: 6, y: 0, cols: 6, rows: 3 },
+      { x: 6, y: 3, cols: 4, rows: 3 },
+      { x: 10, y: 3, cols: 2, rows: 2 },
+      { x: 0, y: 4, cols: 4, rows: 2 },
+      { x: 4, y: 4, cols: 2, rows: 2 },
+      { x: 10, y: 5, cols: 2, rows: 3 },
+      { x: 0, y: 6, cols: 2, rows: 2 },
+      { x: 2, y: 6, cols: 2, rows: 2 },
+      { x: 4, y: 6, cols: 2, rows: 2 },
+      { x: 6, y: 6, cols: 2, rows: 2 },
+      { x: 8, y: 6, cols: 2, rows: 2 },
+    ],
+    [
+      { x: 0, y: 0, cols: 2, rows: 2 },
+      { x: 2, y: 0, cols: 2, rows: 2 },
+      { x: 4, y: 0, cols: 4, rows: 3 },
+      { x: 8, y: 0, cols: 2, rows: 4 },
+      { x: 10, y: 0, cols: 2, rows: 4 },
+      { x: 0, y: 2, cols: 2, rows: 3 },
+      { x: 2, y: 2, cols: 2, rows: 2 },
+      { x: 4, y: 3, cols: 4, rows: 3 },
+      { x: 2, y: 4, cols: 2, rows: 2 },
+      { x: 8, y: 4, cols: 4, rows: 4 },
+      { x: 0, y: 5, cols: 2, rows: 3 },
+      { x: 2, y: 6, cols: 6, rows: 2 },
+    ],
+  ];
+
+  const flipX = (slots) => slots.map((s) => ({ ...s, x: COLS - s.x - s.cols }));
+  const flipY = (slots) => slots.map((s) => ({ ...s, y: ROWS - s.y - s.rows }));
+  const REFLECTIONS = [(s) => s, flipX, flipY, (s) => flipX(flipY(s))];
+  const ORIENTED = TEMPLATES.flatMap((template) => REFLECTIONS.map((reflect) => reflect(template)));
+
+  const orientationOf = (col, row, seed) => {
+    const template = ((col + row * 2) % TEMPLATES.length + TEMPLATES.length) % TEMPLATES.length;
+    const reflection = hash(col, row, 7, seed) % REFLECTIONS.length;
+    return template * REFLECTIONS.length + reflection;
+  };
+
+  const toWorldRect = (blockCol, blockRow, rect) => ({
+    x: blockCol * BLOCK_W + rect.x * PITCH,
+    y: blockRow * BLOCK_H + rect.y * PITCH,
+    w: rect.cols * PITCH - GAP,
+    h: rect.rows * PITCH - GAP,
+  });
+
+  /* ── local reflow: exact cover of the block minus a 6×6 window ── */
+
+  const splitRect = (rect, count, rng, out) => {
+    if (count <= 1) {
+      out.push(rect);
+      return;
+    }
+
+    const alongX = rect.cols >= rect.rows;
+    const along = alongX ? rect.cols : rect.rows;
+    const across = alongX ? rect.rows : rect.cols;
+    if (along < 2 || rect.cols * rect.rows < count) {
+      out.push(rect);
+      return;
+    }
+
+    let wanted = Math.round(count * (0.38 + rng() * 0.24));
+    wanted = clamp(wanted, 1, count - 1);
+
+    // a cut at `at` gives the first part `at * across` cells; both sides must
+    // hold their share of the cards
+    const minCut = Math.max(1, Math.ceil(wanted / across));
+    const maxCut = Math.min(along - 1, along - Math.ceil((count - wanted) / across));
+    if (minCut > maxCut) {
+      out.push(rect);
+      return;
+    }
+    const target = Math.round((along * wanted) / count);
+    const cut = clamp(target, minCut, maxCut);
+
+    const first = alongX
+      ? { x: rect.x, y: rect.y, cols: cut, rows: rect.rows }
+      : { x: rect.x, y: rect.y, cols: rect.cols, rows: cut };
+    const second = alongX
+      ? { x: rect.x + cut, y: rect.y, cols: rect.cols - cut, rows: rect.rows }
+      : { x: rect.x, y: rect.y + cut, cols: rect.cols, rows: rect.rows - cut };
+
+    const firstCount = clamp(wanted, 1, count - 1);
+    splitRect(first, firstCount, rng, out);
+    splitRect(second, count - firstCount, rng, out);
+  };
+
+  const buildReflow = (orientation, slotIndex) => {
+    const template = ORIENTED[orientation];
+    const slot = template[slotIndex];
+    if (!slot) return null;
+
+    const rng = mulberry32(hash(orientation, slotIndex, 31, 17));
+
+    const winX = clamp(Math.round(slot.x + slot.cols / 2 - EXPAND / 2), 0, COLS - EXPAND);
+    const winY = clamp(Math.round(slot.y + slot.rows / 2 - EXPAND / 2), 0, ROWS - EXPAND);
+
+    const regions = [
+      { x: 0, y: 0, cols: COLS, rows: winY },
+      { x: 0, y: winY + EXPAND, cols: COLS, rows: ROWS - winY - EXPAND },
+      { x: 0, y: winY, cols: winX, rows: EXPAND },
+      { x: winX + EXPAND, y: winY, cols: COLS - winX - EXPAND, rows: EXPAND },
+    ].filter((region) => region.cols > 0 && region.rows > 0);
+
+    const totalArea = regions.reduce((sum, r) => sum + r.cols * r.rows, 0);
+    const counts = regions.map((r) => Math.max(1, Math.round((SLOTS - 1) * ((r.cols * r.rows) / totalArea))));
+    let assigned = counts.reduce((a, b) => a + b, 0);
+    while (assigned > SLOTS - 1) {
+      const index = counts.findIndex((n) => n > 1);
+      if (index < 0) break;
+      counts[index] -= 1;
+      assigned -= 1;
+    }
+    while (assigned < SLOTS - 1) {
+      const index = counts.indexOf(Math.max(...counts));
+      counts[index] += 1;
+      assigned += 1;
+    }
+
+    const leaves = [];
+    regions.forEach((region, index) => splitRect(region, counts[index], rng, leaves));
+
+    if (leaves.length !== SLOTS - 1) return null;
+
+    // keep card identity: assign the eleven cards to the closest new leaves
+    const cards = [];
+    template.forEach((slotRect, index) => {
+      if (index === slotIndex) return;
+      cards.push({
+        index,
+        cx: slotRect.x + slotRect.cols / 2,
+        cy: slotRect.y + slotRect.rows / 2,
+      });
+    });
+
+    const freeLeaves = leaves.map((leaf) => ({
+      leaf,
+      cx: leaf.x + leaf.cols / 2,
+      cy: leaf.y + leaf.rows / 2,
+    }));
+
+    const rects = new Array(SLOTS);
+    rects[slotIndex] = { x: winX, y: winY, cols: EXPAND, rows: EXPAND };
+
+    while (cards.length && freeLeaves.length) {
+      let bestCard = 0;
+      let bestLeaf = 0;
+      let bestDistance = Infinity;
+      cards.forEach((card, ci) => {
+        freeLeaves.forEach((entry, li) => {
+          const distance = (card.cx - entry.cx) ** 2 + (card.cy - entry.cy) ** 2;
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            bestCard = ci;
+            bestLeaf = li;
+          }
+        });
+      });
+      const card = cards.splice(bestCard, 1)[0];
+      const entry = freeLeaves.splice(bestLeaf, 1)[0];
+      rects[card.index] = entry.leaf;
+    }
+
+    // any rounding leftovers (should not happen) fall back to the template
+    template.forEach((slotRect, index) => {
+      if (!rects[index]) rects[index] = { ...slotRect };
+    });
+
+    return rects;
+  };
+
+  const reflowCache = new Map();
+  const reflowFor = (orientation, slotIndex) => {
+    const key = `${orientation}:${slotIndex}`;
+    if (reflowCache.has(key)) return reflowCache.get(key);
+    let rects = null;
+    try {
+      rects = buildReflow(orientation, slotIndex);
+    } catch (err) {
+      console.warn('[lattice] reflow failed', err);
+    }
+    if (!rects) rects = ORIENTED[orientation].map((slot) => ({ ...slot }));
+    reflowCache.set(key, rects);
+    return rects;
+  };
+
+  /* ── state ── */
+
   const state = {
     images: [],
-    selected: 0,
     seed: 1,
-    cam: { x: 0, y: 0 },
-    focus: { x: 0, y: 0 },
-    widths: [],
-    prefix: [],
-    periodWidth: 1,
-    baseWidth: 320,
-    /** surrounding occurrences: [{ id, img }] — duplicates have distinct ids */
-    order: [],
-    centerToken: null,
-    tokenSeq: 0,
+    cam: { x: 0, y: 0, scale: 1 },
+    active: null, // { col, row, slot }
+    tiles: new Map(), // key -> { el, col, row, slot, photoIndex, layoutKey }
+    focusPoints: new Map(),
+    pendingFocus: new Set(),
   };
 
-  const newToken = (img) => {
-    state.tokenSeq += 1;
-    return { id: `t${state.tokenSeq}`, img };
+  const photoAt = (col, row, slot) => {
+    if (!state.images.length) return 0;
+    return hash(col, row, slot, state.seed) % state.images.length;
   };
 
-  const aspectOf = (index) => {
-    const image = state.images[index];
-    if (!image) return 1;
-    return clamp(image.w && image.h ? image.w / image.h : 1, 0.45, 2.2);
-  };
+  /* ── artwork focus (smart crop) ── */
 
-  /* ══════════════════════════ endless masonry ══════════════════════════ */
-
-  const wallTiles = new Map();
-  const columns = new Map();
-  let lastRange = '';
-  let updateFrame = 0;
-
-  const buildWidths = () => {
-    const base = clamp(Math.round(window.innerWidth / 4.6), 200, 380);
-    const rand = mulberry32(hash(0, 991, state.seed));
-
-    const widths = [];
-    let total = 0;
-    for (let i = 0; i < CYCLE; i += 1) {
-      const width = Math.max(160, Math.round(base * (0.68 + rand() * 0.72)));
-      widths.push(width);
-      total += width;
-    }
-
-    const prefix = [];
-    let cursor = 0;
-    for (let i = 0; i < CYCLE; i += 1) {
-      prefix.push(cursor);
-      cursor += widths[i];
-    }
-
-    state.baseWidth = base;
-    state.widths = widths;
-    state.prefix = prefix;
-    state.periodWidth = total;
-  };
-
-  const columnAtX = (x) => {
-    const cycle = Math.floor(x / state.periodWidth);
-    const local = x - cycle * state.periodWidth;
-    let pos = 0;
-    while (pos < CYCLE - 1 && local >= state.prefix[pos + 1]) pos += 1;
-    return cycle * CYCLE + pos;
-  };
-
-  const columnOrigin = (index) => {
-    const cycle = Math.floor(index / CYCLE);
-    const pos = ((index % CYCLE) + CYCLE) % CYCLE;
-    return {
-      pos,
-      x: cycle * state.periodWidth + state.prefix[pos],
-      width: state.widths[pos],
-    };
-  };
-
-  const getColumn = (index) => {
-    const cached = columns.get(index);
-    if (cached) return cached;
-
-    const { x, width } = columnOrigin(index);
-    const rand = mulberry32(hash(index, 0, state.seed));
-    const items = [];
-    let cursor = 0;
-
-    for (let k = 0; k < ITEMS_PER_PERIOD; k += 1) {
-      const itemRand = mulberry32(hash(index, k + 1, state.seed));
-      const imageIndex = Math.floor(itemRand() * state.images.length);
-      const image = state.images[imageIndex];
-      if (!image) continue;
-
-      // height follows the natural aspect: nothing is cropped
-      const aspect = aspectOf(imageIndex);
-      const height = Math.max(60, width / aspect);
-
-      items.push({
-        image,
-        imageIndex,
-        offsetY: cursor,
-        width,
-        height,
-        hue: (imageIndex * 47) % 360,
+  const applyFocus = (photoIndex) => {
+    const point = state.focusPoints.get(photoIndex) || { x: 50, y: 50 };
+    document
+      .querySelectorAll(`.tile[data-index="${photoIndex}"] .tile__img`)
+      .forEach((img) => {
+        img.style.objectPosition = `${point.x}% ${point.y}%`;
       });
-
-      cursor += height;
-    }
-
-    const height = Math.max(1, cursor);
-    const phase = Math.round(rand() * height);
-
-    const column = { x, width, items, height, phase };
-    columns.set(index, column);
-    return column;
   };
 
-  const makeTile = (imageIndex, rect, kind, meta = {}) => {
-    const image = state.images[imageIndex] || state.images[0];
-    const tile = document.createElement('figure');
-    tile.className = `tile tile--${kind}${meta.entering ? ' is-entering' : ''}`;
-    tile.tabIndex = meta.center ? -1 : 0;
-    tile.setAttribute('role', meta.center ? 'img' : 'button');
-    tile.setAttribute('aria-label', image.aria || image.label || '');
-    tile.dataset.src = image.src;
-    tile.dataset.label = image.label || '';
-    tile.dataset.w = String(image.w || '');
-    tile.dataset.h = String(image.h || '');
-    tile.dataset.index = String(imageIndex);
-    tile.dataset.center = meta.center ? '1' : '0';
-    tile.style.left = `${rect.x.toFixed(2)}px`;
-    tile.style.top = `${rect.y.toFixed(2)}px`;
-    tile.style.width = `${rect.w.toFixed(2)}px`;
-    tile.style.height = `${rect.h.toFixed(2)}px`;
-    tile.style.setProperty('--hue', String((imageIndex * 47) % 360));
+  const ensureFocus = (photoIndex) => {
+    if (state.focusPoints.has(photoIndex) || state.pendingFocus.has(photoIndex)) return;
+    if (typeof window.FaceDetector !== 'function') return; // no detector: stay centred
+    const image = state.images[photoIndex];
+    if (!image) return;
+
+    state.pendingFocus.add(photoIndex);
+    const probe = new Image();
+    probe.crossOrigin = 'anonymous';
+    probe.src = image.src;
+    probe
+      .decode()
+      .then(async () => {
+        const detector = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+        const faces = await detector.detect(probe);
+        if (faces && faces.length) {
+          const box = faces[0].boundingBox;
+          const x = ((box.x + box.width / 2) / probe.naturalWidth) * 100;
+          const y = ((box.y + box.height / 2) / probe.naturalHeight) * 100;
+          state.focusPoints.set(photoIndex, {
+            x: clamp(Math.round(x), 10, 90),
+            y: clamp(Math.round(y), 10, 90),
+          });
+        } else {
+          state.focusPoints.set(photoIndex, { x: 50, y: 50 });
+        }
+      })
+      .catch(() => {
+        state.focusPoints.set(photoIndex, { x: 50, y: 50 });
+      })
+      .finally(() => {
+        state.pendingFocus.delete(photoIndex);
+        applyFocus(photoIndex);
+      });
+  };
+
+  /* ── tiles ── */
+
+  const createTile = (col, row, slot, photoIndex, rect) => {
+    const image = state.images[photoIndex] || state.images[0];
+    const el = document.createElement('figure');
+    el.className = 'tile is-entering';
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.dataset.block = `${col}:${row}`;
+    el.dataset.col = String(col);
+    el.dataset.row = String(row);
+    el.dataset.slot = String(slot);
+    el.dataset.index = String(photoIndex);
+    el.dataset.src = image.src;
+    el.dataset.label = image.label || '';
+    el.style.left = `${rect.x}px`;
+    el.style.top = `${rect.y}px`;
+    el.style.width = `${rect.w}px`;
+    el.style.height = `${rect.h}px`;
 
     const frame = document.createElement('div');
     frame.className = 'tile__frame';
@@ -191,433 +373,223 @@
     img.alt = '';
     img.decoding = 'async';
     img.draggable = false;
-    img.loading = meta.center ? 'eager' : 'lazy';
-    img.addEventListener('load', () => img.classList.add('is-loaded'), { once: true });
-    img.addEventListener('error', () => tile.classList.add('is-failed'), { once: true });
+    img.loading = 'lazy';
     img.src = image.src;
+    const point = state.focusPoints.get(photoIndex) || { x: 50, y: 50 };
+    img.style.objectPosition = `${point.x}% ${point.y}%`;
+    img.addEventListener('load', () => img.classList.add('is-loaded'), { once: true });
+    img.addEventListener('error', () => el.classList.add('is-failed'), { once: true });
+
+    const caption = document.createElement('figcaption');
+    caption.className = 'tile__caption';
+    caption.textContent = image.label || '';
+    el.setAttribute('aria-label', image.aria || image.label || '');
 
     frame.appendChild(img);
-    tile.appendChild(frame);
-    return tile;
+    frame.appendChild(caption);
+    el.appendChild(frame);
+
+    return el;
   };
 
-  const updateWall = () => {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
+  const updateTile = (entry, col, row, slot, photoIndex, rect, isExpanded) => {
+    const image = state.images[photoIndex] || state.images[0];
+    const { el } = entry;
+    el.style.left = `${rect.x}px`;
+    el.style.top = `${rect.y}px`;
+    el.style.width = `${rect.w}px`;
+    el.style.height = `${rect.h}px`;
+    el.dataset.block = `${col}:${row}`;
+    el.dataset.col = String(col);
+    el.dataset.row = String(row);
+    el.dataset.slot = String(slot);
+    el.dataset.index = String(photoIndex);
+    el.dataset.src = image.src;
+    el.dataset.label = image.label || '';
+    el.setAttribute('aria-label', image.aria || image.label || '');
 
-    const left = -state.cam.x;
-    const top = -state.cam.y;
-    const right = left + vw;
-    const bottom = top + vh;
+    const img = el.querySelector('.tile__img');
+    if (img.getAttribute('src') !== image.src) {
+      img.classList.remove('is-loaded');
+      img.src = image.src;
+    }
+    const point = state.focusPoints.get(photoIndex) || { x: 50, y: 50 };
+    img.style.objectPosition = `${point.x}% ${point.y}%`;
+    el.querySelector('.tile__caption').textContent = image.label || '';
 
-    const marginX = 180;
-    const marginY = 220;
+    el.classList.toggle('is-expanded', isExpanded);
+    el.setAttribute('role', isExpanded ? 'img' : 'button');
+    el.tabIndex = isExpanded ? -1 : 0;
+    entry.photoIndex = photoIndex;
+  };
 
-    const first = columnAtX(left - marginX) - 1;
-    const last = columnAtX(right + marginX) + 1;
+  const layoutForBlock = (col, row) => {
+    const orientation = orientationOf(col, row, state.seed);
+    const activeHere = state.active && state.active.col === col && state.active.row === row;
+    if (activeHere) {
+      return reflowFor(orientation, state.active.slot);
+    }
+    return ORIENTED[orientation];
+  };
 
-    const range = `${first}:${last}:${Math.round(top)}:${Math.round(bottom)}`;
-    if (range === lastRange) return;
+  /* ── viewport culling ── */
+
+  let frame = 0;
+  let lastRange = '';
+
+  const schedule = () => {
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      sync();
+    });
+  };
+
+  const sync = () => {
+    if (!state.images.length) return;
+
+    const { x, y, scale } = state.cam;
+    const left = -x / scale;
+    const top = -y / scale;
+    const right = (window.innerWidth - x) / scale;
+    const bottom = (window.innerHeight - y) / scale;
+    const overscan = 420;
+
+    const colFrom = Math.floor((left - overscan) / BLOCK_W);
+    const colTo = Math.floor((right + overscan) / BLOCK_W);
+    const rowFrom = Math.floor((top - overscan) / BLOCK_H);
+    const rowTo = Math.floor((bottom + overscan) / BLOCK_H);
+
+    const needed = new Set();
+    const blocks = [];
+    for (let row = rowFrom; row <= rowTo; row += 1) {
+      for (let col = colFrom; col <= colTo; col += 1) {
+        blocks.push([col, row]);
+      }
+    }
+    if (state.active) {
+      const already = blocks.some(([c, r]) => c === state.active.col && r === state.active.row);
+      if (!already) blocks.push([state.active.col, state.active.row]);
+    }
+
+    const range = `${colFrom}:${colTo}:${rowFrom}:${rowTo}:${state.active ? `${state.active.col}:${state.active.row}:${state.active.slot}` : ''}`;
+    const layoutDirty = range !== lastRange;
     lastRange = range;
 
-    const alive = new Set();
+    let built = 0;
+    for (const [col, row] of blocks) {
+      if (built >= MAX_TILES) break;
+      const rects = layoutForBlock(col, row);
+      const isActiveBlock = Boolean(state.active && state.active.col === col && state.active.row === row);
 
-    for (let index = first; index <= last; index += 1) {
-      const column = getColumn(index);
-      if (!column.items.length) continue;
+      for (let slot = 0; slot < SLOTS; slot += 1) {
+        const key = `${col}:${row}:${slot}`;
+        needed.add(key);
+        const photoIndex = photoAt(col, row, slot);
+        const rect = toWorldRect(col, row, rects[slot]);
+        const expanded = isActiveBlock && state.active.slot === slot;
+        let entry = state.tiles.get(key);
 
-      const yTop = top - marginY - column.phase;
-      const yBottom = bottom + marginY - column.phase;
-      const firstPeriod = Math.floor(yTop / column.height);
-      const lastPeriod = Math.floor(yBottom / column.height);
-
-      for (let period = firstPeriod; period <= lastPeriod; period += 1) {
-        for (let k = 0; k < column.items.length; k += 1) {
-          const item = column.items[k];
-          const key = `${index}:${period}:${k}`;
-          alive.add(key);
-
-          if (!wallTiles.has(key)) {
-            const tile = makeTile(item.imageIndex, {
-              x: column.x,
-              y: column.phase + period * column.height + item.offsetY,
-              w: item.width,
-              h: item.height,
-            }, 'wall');
-            wallTiles.set(key, tile);
-            wall.appendChild(tile);
-          }
+        if (!entry) {
+          const el = createTile(col, row, slot, photoIndex, rect);
+          entry = { el, col, row, slot, photoIndex };
+          state.tiles.set(key, entry);
+          wall.appendChild(el);
+          updateTile(entry, col, row, slot, photoIndex, rect, expanded);
+          built += 1;
+        } else if (layoutDirty) {
+          updateTile(entry, col, row, slot, photoIndex, rect, expanded);
         }
       }
     }
 
-    for (const [key, tile] of wallTiles) {
-      if (alive.has(key)) continue;
-      tile.remove();
-      wallTiles.delete(key);
+    for (const [key, entry] of state.tiles) {
+      if (needed.has(key)) continue;
+      entry.el.remove();
+      state.tiles.delete(key);
     }
+
+    if (state.active) ensureFocus(photoAt(state.active.col, state.active.row, state.active.slot));
   };
 
-  const scheduleWall = () => {
-    if (updateFrame) return;
-    updateFrame = requestAnimationFrame(() => {
-      updateFrame = 0;
-      updateWall();
-    });
-  };
+  /* ── public ── */
 
-  /* ═══════════════════════════ spotlight patch ═════════════════════════ */
-
-  let patchTiles = [];
-  const leavingTimers = new Set();
-
-  const nextInOrder = (cursor) => {
-    if (!state.order.length) return state.selected;
-    const value = state.order[cursor % state.order.length];
-    return value;
-  };
-
-  const buildPatchSlots = () => {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const image = state.images[state.selected];
-    if (!image) return [];
-
-    const aspect = aspectOf(state.selected);
-
-    let centerW = Math.min(vw * (vw < 640 ? 0.72 : 0.64), vh * 0.76 * aspect);
-    let centerH = centerW / aspect;
-    const minBandY = Math.min(64, vh * 0.08);
-    if ((vh - centerH) / 2 < minBandY) {
-      centerH = vh - minBandY * 2;
-      centerW = centerH * aspect;
-    }
-    if (centerW > vw * 0.88) {
-      centerW = vw * 0.88;
-      centerH = centerW / aspect;
-    }
-
-    const centerToken = state.centerToken || newToken(state.selected);
-
-    const center = {
-      x: state.focus.x - centerW / 2,
-      y: state.focus.y - centerH / 2,
-      w: centerW,
-      h: centerH,
-      imageIndex: centerToken.img,
-      tokenId: centerToken.id,
-      center: true,
-    };
-
-    const slots = [center];
-    const rowWidth = Math.max(vw, 720) * PATCH_ROW_WIDTH;
-    let cursor = 0;
-
-    const take = () => {
-      if (cursor < state.order.length) {
-        const token = state.order[cursor];
-        cursor += 1;
-        return token;
-      }
-      // geometry needed more occurrences than planned: extend with a new one
-      const token = newToken(state.selected);
-      state.order.push(token);
-      cursor += 1;
-      return token;
-    };
-
-    const laidRow = () => {
-      const tokens = [];
-      let aspectSum = 0;
-      for (let i = 0; i < ROW_IMAGES; i += 1) {
-        const token = take();
-        tokens.push(token);
-        aspectSum += aspectOf(token.img);
-      }
-      const height = rowWidth / Math.max(0.001, aspectSum);
-      let x = state.focus.x - rowWidth / 2;
-      const items = [];
-      for (const token of tokens) {
-        const width = height * aspectOf(token.img);
-        items.push({ token, x, width, height });
-        x += width;
-      }
-      return items;
-    };
-
-    // top row, flush against the centre
-    for (const item of laidRow()) {
-      slots.push({
-        x: item.x,
-        y: center.y - item.height,
-        w: item.width,
-        h: item.height,
-        imageIndex: item.token.img,
-        tokenId: item.token.id,
-        center: false,
-      });
-    }
-
-    // bottom row, flush against the centre
-    for (const item of laidRow()) {
-      slots.push({
-        x: item.x,
-        y: center.y + centerH,
-        w: item.width,
-        h: item.height,
-        imageIndex: item.token.img,
-        tokenId: item.token.id,
-        center: false,
-      });
-    }
-
-    // side columns stack to exactly the centre height
-    const laidColumn = () => {
-      const tokens = [];
-      let inverseSum = 0;
-      for (let i = 0; i < COLUMN_IMAGES; i += 1) {
-        const token = take();
-        tokens.push(token);
-        inverseSum += 1 / aspectOf(token.img);
-      }
-      const width = centerH / Math.max(0.001, inverseSum);
-      const items = [];
-      let y = center.y;
-      for (const token of tokens) {
-        const height = width / aspectOf(token.img);
-        items.push({ token, y, width, height });
-        y += height;
-      }
-      return items;
-    };
-
-    let x = center.x;
-    for (let c = 0; c < SIDE_COLUMNS; c += 1) {
-      const column = laidColumn();
-      x -= column[0].width;
-      for (const item of column) {
-        slots.push({
-          x,
-          y: item.y,
-          w: item.width,
-          h: item.height,
-          imageIndex: item.token.img,
-          tokenId: item.token.id,
-          center: false,
-        });
-      }
-    }
-
-    x = center.x + centerW;
-    for (let c = 0; c < SIDE_COLUMNS; c += 1) {
-      const column = laidColumn();
-      for (const item of column) {
-        slots.push({
-          x,
-          y: item.y,
-          w: item.width,
-          h: item.height,
-          imageIndex: item.token.img,
-          tokenId: item.token.id,
-          center: false,
-        });
-      }
-      x += column[0].width;
-    }
-
-    return slots;
-  };
-
-  const applyPatchSlot = (el, slot, imageIndex) => {
-    const image = state.images[imageIndex] || state.images[0];
-    el.style.left = `${slot.x.toFixed(2)}px`;
-    el.style.top = `${slot.y.toFixed(2)}px`;
-    el.style.width = `${slot.w.toFixed(2)}px`;
-    el.style.height = `${slot.h.toFixed(2)}px`;
-    el.dataset.index = String(imageIndex);
-    el.dataset.token = slot.tokenId || '';
-    el.dataset.center = slot.center ? '1' : '0';
-    el.dataset.src = image.src;
-    el.dataset.label = image.label || '';
-    el.dataset.w = String(image.w || '');
-    el.dataset.h = String(image.h || '');
-    el.tabIndex = slot.center ? -1 : 0;
-    el.setAttribute('role', slot.center ? 'img' : 'button');
-    el.setAttribute('aria-label', image.aria || image.label || '');
-    el.classList.toggle('is-center', Boolean(slot.center));
-
-    const img = el.querySelector('.tile__img');
-    if (img && img.getAttribute('src') !== image.src) {
-      img.classList.remove('is-loaded');
-      img.src = image.src;
-    }
-  };
-
-  const layoutPatch = () => {
-    const slots = buildPatchSlots();
-    const free = new Map();
-    for (const item of patchTiles) {
-      if (!free.has(item.tokenId)) free.set(item.tokenId, []);
-      free.get(item.tokenId).push(item);
-    }
-
-    const next = [];
-
-    for (const slot of slots) {
-      const queue = free.get(slot.tokenId);
-      let tile = queue && queue.length ? queue.pop() : null;
-
-      if (tile) {
-        tile.el.classList.remove('is-leaving');
-        applyPatchSlot(tile.el, slot, slot.imageIndex);
-        tile.tokenId = slot.tokenId;
-        next.push(tile);
-      } else {
-        const el = makeTile(slot.imageIndex, { x: slot.x, y: slot.y, w: slot.w, h: slot.h }, 'patch', {
-          center: slot.center,
-          entering: true,
-        });
-        applyPatchSlot(el, slot, slot.imageIndex);
-        wall.appendChild(el);
-        next.push({ el, tokenId: slot.tokenId });
-      }
-    }
-
-    for (const [, list] of free) {
-      for (const tile of list) {
-        tile.el.classList.add('is-leaving');
-        const timer = setTimeout(() => {
-          tile.el.remove();
-          leavingTimers.delete(timer);
-        }, 380);
-        leavingTimers.add(timer);
-      }
-    }
-
-    patchTiles = next;
-    return { x: state.focus.x, y: state.focus.y };
-  };
-
-  /* ═══════════════════════════ public API ══════════════════════════════ */
-
-  const buildTokens = (selectedImage) => {
-    const others = [];
-    for (let i = 0; i < state.images.length; i += 1) {
-      if (i !== selectedImage) others.push(i);
-    }
-    const rand = mulberry32(hash(selectedImage, state.seed, 53));
-    for (let i = others.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(rand() * (i + 1));
-      [others[i], others[j]] = [others[j], others[i]];
-    }
-
-    const pool = others.length ? others : [selectedImage];
-    state.order = [];
-    for (let i = 0; i < SURROUND_SLOTS; i += 1) {
-      state.order.push(newToken(pool[i % pool.length]));
-    }
-    state.centerToken = newToken(selectedImage);
-    state.selected = selectedImage;
+  const expandedWorldRect = () => {
+    if (!state.active) return null;
+    const orientation = orientationOf(state.active.col, state.active.row, state.seed);
+    const rects = reflowFor(orientation, state.active.slot);
+    return toWorldRect(state.active.col, state.active.row, rects[state.active.slot]);
   };
 
   const render = (options = {}) => {
     const images = Array.isArray(options.images) ? options.images.filter((i) => i && i.src) : [];
-
     state.images = images;
     state.seed = Math.round(options.seed ?? 1);
-    state.focus = options.focus || {
-      x: window.innerWidth / 2,
-      y: window.innerHeight / 2,
-    };
-    state.selected = clamp(Math.round(options.selected ?? 0), 0, Math.max(0, images.length - 1));
+    state.focusPoints.clear();
+    state.pendingFocus.clear();
 
-    buildWidths();
-    for (const tile of wallTiles.values()) tile.remove();
-    wallTiles.clear();
-    for (const item of patchTiles) item.el.remove();
-    patchTiles = [];
+    for (const entry of state.tiles.values()) entry.el.remove();
+    state.tiles.clear();
+    reflowCache.clear();
     lastRange = '';
-    columns.clear();
 
-    if (!images.length) return 0;
+    if (!images.length) return null;
 
-    buildTokens(state.selected);
-    updateWall();
-    layoutPatch();
-    return { x: state.focus.x, y: state.focus.y };
+    // open on a random card of the first block, expanded, like Lattice centring the playing song
+    const rng = mulberry32(hash(state.seed, 1, 2, 3));
+    const slot = Math.floor(rng() * SLOTS);
+    state.active = { col: 0, row: 0, slot };
+
+    sync();
+    return expandedWorldRect();
   };
 
-  const selectTile = (el) => {
-    if (!el || !state.images.length) return null;
-
-    if (el.classList.contains('tile--patch')) {
-      if (el.dataset.center === '1') return null;
-      const tokenId = el.dataset.token;
-      const at = state.order.findIndex((token) => token.id === tokenId);
-      if (at < 0 || !state.centerToken) return null;
-
-      const clicked = state.order[at];
-      const oldCenter = state.centerToken;
-      // swap occurrences (ids), not images: duplicates stay distinct
-      state.order[at] = oldCenter;
-      state.centerToken = clicked;
-      state.selected = clicked.img;
-
-      state.focus = {
-        x: el.offsetLeft + el.offsetWidth / 2,
-        y: el.offsetTop + el.offsetHeight / 2,
-      };
-
-      layoutPatch();
-      return { x: state.focus.x, y: state.focus.y };
+  const expandTile = (el) => {
+    if (!el || el.classList.contains('is-expanded')) {
+      state.active = null;
+      sync();
+      return null;
     }
+    const col = Number(el.dataset.col);
+    const row = Number(el.dataset.row);
+    const slot = Number(el.dataset.slot);
+    if (![col, row, slot].every(Number.isInteger)) return null;
 
-    if (el.classList.contains('tile--wall')) {
-      const imageIndex = Number(el.dataset.index);
-      if (!Number.isInteger(imageIndex)) return null;
-      const focus = {
-        x: el.offsetLeft + el.offsetWidth / 2,
-        y: el.offsetTop + el.offsetHeight / 2,
-      };
-      state.focus = focus;
-      buildTokens(imageIndex);
-      layoutPatch();
-      return focus;
+    state.active = { col, row, slot };
+    sync();
+    return expandedWorldRect();
+  };
+
+  const collapse = () => {
+    if (!state.active) return;
+    state.active = null;
+    sync();
+  };
+
+  const setCamera = (x, y, scale) => {
+    state.cam = { x, y, scale };
+    if (wall) {
+      wall.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) scale(${scale.toFixed(4)})`;
     }
-
-    return null;
+    schedule();
   };
 
-  const setCamera = (x, y) => {
-    state.cam = { x, y };
-    if (wall) wall.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0)`;
-    scheduleWall();
+  const refreshCaptions = () => {
+    for (const entry of state.tiles.values()) {
+      const image = state.images[entry.photoIndex];
+      if (!image) continue;
+      entry.el.querySelector('.tile__caption').textContent = image.label || '';
+      entry.el.setAttribute('aria-label', image.aria || image.label || '');
+    }
   };
-
-  const refresh = () => {
-    if (!state.images.length) return;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    state.focus = { x: vw / 2 - state.cam.x, y: vh / 2 - state.cam.y };
-    buildWidths();
-    for (const tile of wallTiles.values()) tile.remove();
-    wallTiles.clear();
-    columns.clear();
-    lastRange = '';
-    updateWall();
-    layoutPatch();
-  };
-
-  let resizeTimer = 0;
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(refresh, 140);
-  });
 
   window.LatticeCollage = {
     render,
-    selectTile,
+    expandTile,
+    collapse,
+    activeRect: expandedWorldRect,
     setCamera,
-    tileCount: () => wallTiles.size + patchTiles.length,
+    refreshCaptions,
+    counts: () => ({ tiles: state.tiles.size, active: state.active }),
   };
 })();
