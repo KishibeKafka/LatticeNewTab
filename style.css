@@ -122,8 +122,6 @@ svg {
   z-index: 0;
   overflow: hidden;
   background: #dde0e5;
-  cursor: grab;
-  touch-action: none;
   filter: blur(var(--bg-blur)) saturate(1.02);
   transition: filter 0.35s var(--ease-standard);
 }
@@ -131,31 +129,28 @@ svg {
 .collage__wall {
   position: absolute;
   inset: 0;
-  transform-origin: 0 0;
-  will-change: transform;
 }
 
 .tile {
   position: absolute;
   margin: 0;
   border-radius: var(--tile-radius);
-  cursor: zoom-in;
-  transform: scale(var(--zoom, 1));
-  transform-origin: 50% 50%;
+  cursor: pointer;
   transition:
-    transform 0.55s var(--ease-emphasized),
-    opacity 0.35s var(--ease-standard);
+    left 0.62s var(--ease-emphasized),
+    top 0.62s var(--ease-emphasized),
+    width 0.62s var(--ease-emphasized),
+    height 0.62s var(--ease-emphasized),
+    opacity 0.32s var(--ease-standard);
 }
 
-.tile.is-focused {
-  z-index: 5000;
-  cursor: zoom-out;
+.tile.is-center {
+  cursor: default;
 }
 
-.tile.is-focused .tile__frame {
-  box-shadow:
-    0 40px 90px rgba(16, 17, 22, 0.45),
-    0 8px 24px rgba(16, 17, 22, 0.35);
+.tile.is-leaving {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .tile:focus-visible {
@@ -164,16 +159,6 @@ svg {
 
 .tile:focus-visible .tile__frame {
   box-shadow: inset 0 0 0 3px var(--blue);
-}
-
-body.is-panning .collage,
-body.is-panning .tile {
-  cursor: grabbing;
-}
-
-body.has-focus .collage,
-body.has-focus .tile {
-  cursor: zoom-out;
 }
 
 .tile__frame {
@@ -258,8 +243,7 @@ body.has-focus .tile {
   transition: opacity 0.25s var(--ease-standard);
 }
 
-body.is-drawer-open .settings-btn,
-body.has-focus .settings-btn {
+body.is-drawer-open .settings-btn {
   opacity: 0;
   pointer-events: none;
 }

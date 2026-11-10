@@ -73,7 +73,7 @@
       'lang.en': 'English',
       'lang.zh': '中文',
 
-      'btn.reset': 'Reset layout',
+      'btn.reset': 'Reset appearance',
       'btn.done': 'Done',
 
       'unit.photos': '{n} photos',
@@ -108,7 +108,7 @@
       'toast.urlAdded': 'Image added to your wall',
       'toast.libraryCleared': 'Library cleared',
       'toast.shuffled': 'Wall shuffled',
-      'toast.layoutReset': 'Layout reset',
+      'toast.layoutReset': 'Appearance reset',
       'toast.collection': '{name} wall',
       'toast.removed': '{name} removed',
       'toast.confirmClear': 'Remove every photo from your library?',
@@ -128,7 +128,7 @@
       'lightbox.counter': '{i} of {total}',
       'lightbox.open': 'Open photo',
       'collage.label': 'Endless photo wall',
-      'wall.note': 'Drag to explore the endless wall · click a photo to centre and enlarge it.',
+      'wall.note': 'Click any photo to enlarge it in the centre — the rest of the wall reflows around it.',
     },
 
     zh: {
@@ -197,7 +197,7 @@
       'lang.en': 'English',
       'lang.zh': '中文',
 
-      'btn.reset': '重置排布',
+      'btn.reset': '重置外观',
       'btn.done': '完成',
 
       'unit.photos': '{n} 张照片',
@@ -232,7 +232,7 @@
       'toast.urlAdded': '已加入照片墙',
       'toast.libraryCleared': '图库已清空',
       'toast.shuffled': '已换一批',
-      'toast.layoutReset': '排布已重置',
+      'toast.layoutReset': '外观已重置',
       'toast.collection': '{name}图集',
       'toast.removed': '已移除 {name}',
       'toast.confirmClear': '确定要移除图库中的所有照片吗？',
@@ -252,7 +252,7 @@
       'lightbox.counter': '第 {i} / {total} 张',
       'lightbox.open': '查看照片',
       'collage.label': '无限照片墙',
-      'wall.note': '拖动画面无限浏览 · 点击照片把它移到中央放大',
+      'wall.note': '点击任意照片，它会放大到中央，其余照片自动重排。',
     },
   };
 

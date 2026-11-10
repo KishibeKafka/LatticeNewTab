@@ -1,14 +1,14 @@
 # Lattice
 
-An **endless, gap-free photo mosaic** for your new tab. Photos tile the plane
-flush — square corners, no gutters, no overlaps — and the wall keeps going in
-every direction. Click a photo and that photo itself grows in place while the
-camera simply pans to centre it. One small settings button, no clock, no search
-bar, **English / 中文**.
+A **photo mosaic with a permanent centre** for your new tab. The selected photo
+sits enlarged in the middle, square-cornered and edge-to-edge; the rest of the
+wall reflows around it with no gaps and no overlaps. Click another photo and it
+swaps into the centre — the old one shrinks back into the mosaic, and everything
+glides to its new place. There is no "exit": the composition always has a centre.
 
 ![Lattice new tab](docs/screenshot.png)
 
-![Click a photo: it enlarges while the camera pans](docs/focus.png)
+![Another photo selected: the composition reflows](docs/selected.png)
 
 ![Customize panel](docs/customize.png)
 
@@ -21,28 +21,24 @@ bar, **English / 中文**.
 | 3 | Photo library, URL sources, curated sets | ✅ |
 | 4 | Material polish, skeletons, reduced motion | ✅ |
 | 5 | English / 中文 UI with language switch | ✅ |
-| 6 | Endless wall, drag-to-pan | ✅ |
-| 7 | Non-overlapping masonry | ✅ |
-| 8 | Flush square-cornered tiling, in-place photo zoom | ✅ |
+| 6 | Gap-free square-cornered mosaic | ✅ |
+| 7 | Centre spotlight composition with reflow | ✅ |
 
 ## Features
 
-- **Flush tiling, no gaps** — columns with varying widths sit edge to edge and
-  photos stack inside them at their natural aspect ratio with zero spacing.
-  Every pixel of the plane is covered, and nothing overlaps anything else.
-- **Square corners** — photos meet at right angles, like a contact-sheet
-  mosaic.
-- **Random sizes** — column widths vary within a repeating cycle and heights
-  follow each photo's aspect ratio, so small and large frames alternate across
-  the wall.
-- **Endless in both axes** — every column repeats with its own vertical period,
-  so dragging generates new photos forever. Only columns near the viewport stay
-  in the DOM.
-- **Click = photo zoom, camera pan** — the clicked photo scales up in place (up
-  to 3.5×) while the camera only translates to put it in the centre; the other
-  photos keep their size. Click anywhere or press `Esc` to glide back.
-- **Drag with inertia** — grab anywhere on the wall and flick it; there are no
-  edges to hit.
+- **Permanent centre photo** — on every new tab a random photo is picked and
+  enlarged to the middle of the screen at its natural aspect ratio (no crop).
+- **Gapless surroundings** — the remaining space is split into four regions
+  (above, below, left, right of the centre) and filled with the other photos
+  edge-to-edge, sized as a varied grid and cropped to fit. The viewport is
+  covered 100%, with zero overlaps.
+- **Click to swap** — click any surrounding photo: it grows into the centre,
+  the previous centre shrinks back into the surrounding mosaic, and every tile
+  animates to its new rectangle.
+- **Irreversible** — there is no dismiss/zoom-out state. The only way to change
+  the composition is to select another photo. Clicking the centre does nothing.
+- **Square corners, no gutters** — photos meet at right angles across the whole
+  screen.
 - **Three sources**
   - **Upload** — drop or pick images; downscaled to 1800 px, re-encoded to WebP
     and stored in IndexedDB. Nothing leaves the device.
@@ -61,9 +57,6 @@ bar, **English / 中文**.
 | Atmosphere | Wash · Blur · Film grain |
 | Language | Auto · English · 中文 |
 
-Layout controls (density, tilt, gap, radius, tile shape) are gone: the wall now
-tiles itself so photos stay whole and tight.
-
 ## Install (unpacked)
 
 1. Open `chrome://extensions` and enable **Developer mode**.
@@ -79,17 +72,33 @@ directly in a browser: outside the extension `chrome.storage` falls back to
 ```
 manifest.json            MV3 manifest (new tab override, storage)
 newtab.html              collage, settings button, drawer
-style.css                Material tokens, wall, atmosphere, drawer
+style.css                Material tokens, mosaic, atmosphere, drawer
 i18n.js                  English/中文 dictionary + DOM applier
 store.js                 chrome.storage.local ⇄ localStorage adapter
 library.js               IndexedDB library, upload pipeline, curated sets
-collage.js               endless gap-free tiling + camera
-app.js                   panning, photo zoom, drawer, persistence
+collage.js               centre spotlight layout with tile reflow
+app.js                   selection, drawer, sources, persistence
 assets/defaults/         24 bundled photos (instant, offline)
 icons/                   generated PNG icons (16/32/48/128)
 tools/make-icons.mjs     zero-dependency icon generator
 tools/fetch-defaults.mjs refreshes assets/defaults from Lorem Picsum
 ```
+
+## Layout
+
+```
+┌───────────────────────── viewport ─────────────────────────┐
+│                 top band (full width)                     │
+├───────────────┬───────────────────────┬───────────────────┤
+│  left strip   │     CENTRE PHOTO      │   right strip     │
+│               │  (natural aspect)     │                   │
+├───────────────┴───────────────────────┴───────────────────┤
+│                bottom band (full width)                   │
+└───────────────────────────────────────────────────────────┘
+```
+
+Each band is filled with rows of photos; row heights and column widths are
+seeded random, so the mosaic looks different every time. No gaps, no overlaps.
 
 ## Storage model
 
@@ -107,8 +116,8 @@ the browser straight from their host.
 
 | Token | Purpose |
 | ----- | ------- |
-| `--bg-blur` | Blur applied to the wall |
-| `--dim` | Strength of the white wash over the wall |
+| `--bg-blur` | Blur applied to the mosaic |
+| `--dim` | Strength of the white wash over the mosaic |
 | `--grain-opacity` | Film-grain texture |
 | `--blue` / `--ink-*` | Google Material palette |
 
@@ -116,8 +125,8 @@ the browser straight from their host.
 
 | Key | Action |
 | ---- | ------ |
-| `S` | Shuffle into a brand-new wall |
-| `Esc` | Shrink the focused photo / close settings |
+| `S` | New random composition and centre |
+| `Esc` | Close settings |
 
 ## Icons & default photos
 
