@@ -1,6 +1,6 @@
 /**
- * app.js — endless wall, panning, in-place photo focus and the settings drawer.
- * Wall generation lives in collage.js, photo storage in library.js.
+ * app.js — endless wall, camera pan/zoom, settings drawer.
+ * Wall layout lives in collage.js, photos in library.js.
  */
 (() => {
   'use strict';
@@ -17,10 +17,6 @@
   const SETTINGS_KEY = 'lattice:settings';
 
   const DEFAULTS = {
-    density: 24,
-    tilt: 3,
-    gap: 8,
-    radius: 12,
     dim: 0,
     blur: 0,
     grain: false,
@@ -30,16 +26,9 @@
   };
 
   const RANGES = {
-    density: [6, 90],
-    tilt: [0, 8],
-    gap: [0, 40],
-    radius: [4, 20],
     dim: [0, 90],
     blur: [0, 18],
   };
-
-  /** Sliders that change the generated wall (everything else is pure CSS). */
-  const WALL_KEYS = new Set(['density', 'tilt', 'gap']);
 
   const DELETE_ICON = `<svg viewBox="0 0 12 12" aria-hidden="true"><path d="m3 3 6 6M9 3 3 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 
@@ -47,7 +36,6 @@
   let wallSeed = Math.floor(Math.random() * 1e6);
   let toastTimer = 0;
   let appliedLanguage = null;
-  let wallTimer = 0;
 
   /* ------------------------------- toast --------------------------------- */
 
@@ -124,46 +112,67 @@
 
   const renderWall = () => {
     const { pool, label } = poolFor();
-    engine.render({
-      images: decorate(pool, label),
-      count: settings.density,
-      tilt: settings.tilt,
-      gap: settings.gap,
-      seed: wallSeed,
-    });
+    engine.render({ images: decorate(pool, label), seed: wallSeed });
   };
 
-  const scheduleWall = () => {
-    clearTimeout(wallTimer);
-    wallTimer = setTimeout(renderWall, 110);
-  };
-
-  /* -------------------------------- pan ---------------------------------- */
+  /* ------------------------------ camera --------------------------------- */
 
   const collageEl = $('collage');
+  const camera = { x: 0, y: 0, z: 1 };
 
-  let pan = { x: 0, y: 0 };
+  let camFrame = 0;
+  let focusActive = false;
+  let camClosing = false;
+  let prevCamera = null;
+
   let velocity = { x: 0, y: 0 };
   let drag = null;
   let panFrame = 0;
 
-  const applyPan = () => engine.setPan(pan.x, pan.y);
+  const applyCamera = () => engine.setCamera(camera.x, camera.y, camera.z);
 
-  const resetPan = () => {
-    cancelAnimationFrame(panFrame);
-    velocity = { x: 0, y: 0 };
-    pan = { x: 0, y: 0 };
-    applyPan();
+  const animateCamera = (target, duration, done) => {
+    cancelAnimationFrame(camFrame);
+    const from = { x: camera.x, y: camera.y, z: camera.z };
+    const start = performance.now();
+
+    const step = (now) => {
+      const progress = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - progress, 5);
+      camera.x = from.x + (target.x - from.x) * eased;
+      camera.y = from.y + (target.y - from.y) * eased;
+      camera.z = from.z + (target.z - from.z) * eased;
+      applyCamera();
+      if (progress < 1) camFrame = requestAnimationFrame(step);
+      else if (done) done();
+    };
+
+    camFrame = requestAnimationFrame(step);
   };
+
+  const resetView = () => {
+    cancelAnimationFrame(camFrame);
+    cancelAnimationFrame(panFrame);
+    camera.x = 0;
+    camera.y = 0;
+    camera.z = 1;
+    velocity = { x: 0, y: 0 };
+    focusActive = false;
+    camClosing = false;
+    document.body.classList.remove('has-focus');
+    applyCamera();
+  };
+
+  /* ------------------------------- pan ----------------------------------- */
 
   const startInertia = () => {
     cancelAnimationFrame(panFrame);
     panFrame = requestAnimationFrame(function step() {
       velocity.x *= 0.94;
       velocity.y *= 0.94;
-      pan.x += velocity.x * 16;
-      pan.y += velocity.y * 16;
-      applyPan();
+      camera.x += velocity.x * 16;
+      camera.y += velocity.y * 16;
+      applyCamera();
       if (Math.hypot(velocity.x, velocity.y) > 0.015) {
         panFrame = requestAnimationFrame(step);
       }
@@ -171,15 +180,16 @@
   };
 
   collageEl?.addEventListener('pointerdown', (event) => {
-    if (event.button !== 0 || focusCard) return;
+    if (event.button !== 0 || focusActive) return;
     cancelAnimationFrame(panFrame);
+    cancelAnimationFrame(camFrame);
     velocity = { x: 0, y: 0 };
     drag = {
       id: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      originX: pan.x,
-      originY: pan.y,
+      originX: camera.x,
+      originY: camera.y,
       lastX: event.clientX,
       lastY: event.clientY,
       lastT: performance.now(),
@@ -214,9 +224,9 @@
     drag.lastY = event.clientY;
     drag.lastT = now;
 
-    pan.x = drag.originX + dx;
-    pan.y = drag.originY + dy;
-    applyPan();
+    camera.x = drag.originX + dx;
+    camera.y = drag.originY + dy;
+    applyCamera();
   });
 
   const endPan = (event) => {
@@ -226,7 +236,7 @@
     document.body.classList.remove('is-panning');
 
     if (!moved && tile) {
-      focusTile(tile);
+      openFocus(tile);
       return;
     }
     if (Math.hypot(velocity.x, velocity.y) > 0.06) startInertia();
@@ -237,144 +247,81 @@
 
   /* ------------------------------ focus ---------------------------------- */
 
-  const focusEl = $('focus');
-  const focusScrim = $('focus-scrim');
-  let focusCard = null;
-  let focusOrigin = null;
-  let focusTimer = 0;
+  const openFocus = (tile) => {
+    if (focusActive || camClosing || isDrawerOpen() || !tile) return;
 
-  const ariaFor = (label) =>
-    label ? `${t('lightbox.open')} · ${label}` : t('lightbox.open');
-
-  const animateCard = (card, to, duration = 560) => {
-    const from = card.getBoundingClientRect();
-    card.getAnimations().forEach((animation) => animation.cancel());
-    card.style.left = `${to.left}px`;
-    card.style.top = `${to.top}px`;
-    card.style.width = `${to.width}px`;
-    card.style.height = `${to.height}px`;
-    return card.animate(
-      [
-        {
-          left: `${from.left}px`,
-          top: `${from.top}px`,
-          width: `${from.width}px`,
-          height: `${from.height}px`,
-        },
-        {
-          left: `${to.left}px`,
-          top: `${to.top}px`,
-          width: `${to.width}px`,
-          height: `${to.height}px`,
-        },
-      ],
-      { duration, easing: 'cubic-bezier(0.2, 0, 0, 1)', fill: 'both' }
-    );
-  };
-
-  const focusTile = (tile) => {
-    if (focusCard || !tile) return;
-
-    clearTimeout(focusTimer);
-    const rect = tile.getBoundingClientRect();
     const width = tile.offsetWidth;
     const height = tile.offsetHeight;
-    const aspect = width / height || 1;
+    if (!width || !height) return;
+
+    const centerX = tile.offsetLeft + width / 2;
+    const centerY = tile.offsetTop + height / 2;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    let targetW = vw * 0.78;
-    let targetH = targetW / aspect;
-    if (targetH > vh * 0.82) {
-      targetH = vh * 0.82;
-      targetW = targetH * aspect;
-    }
+    // zoom so the photo fills a comfortable share of the viewport
+    const zoom = clamp(Math.min((vw * 0.62) / width, (vh * 0.72) / height), 1.15, 3);
 
-    const card = document.createElement('figure');
-    card.className = 'focus__card';
-    card.tabIndex = -1;
-    card.setAttribute('role', 'button');
-    card.setAttribute('aria-label', t('focus.close'));
-
-    const img = document.createElement('img');
-    img.src = tile.dataset.src;
-    img.alt = '';
-    img.draggable = false;
-    card.appendChild(img);
-
-    card.style.left = `${rect.left + (rect.width - width) / 2}px`;
-    card.style.top = `${rect.top + (rect.height - height) / 2}px`;
-    card.style.width = `${width}px`;
-    card.style.height = `${height}px`;
-
-    card.addEventListener('click', () => closeFocus());
-
-    focusEl.appendChild(card);
-    focusEl.hidden = false;
-    tile.classList.add('is-focus-origin');
+    prevCamera = { x: camera.x, y: camera.y, z: camera.z };
+    focusActive = true;
+    cancelAnimationFrame(panFrame);
     document.body.classList.add('has-focus');
 
-    focusCard = card;
-    focusOrigin = tile;
-
-    animateCard(card, {
-      left: (vw - targetW) / 2,
-      top: (vh - targetH) / 2,
-      width: targetW,
-      height: targetH,
-    });
-
-    requestAnimationFrame(() => focusEl.classList.add('is-open'));
-    card.focus({ preventScroll: true });
+    animateCamera(
+      { x: vw / 2 - centerX * zoom, y: vh / 2 - centerY * zoom, z: zoom },
+      660
+    );
   };
 
   const closeFocus = () => {
-    if (!focusCard || !focusOrigin) return;
+    if (!focusActive || camClosing) return;
+    camClosing = true;
+    const target = prevCamera || { x: 0, y: 0, z: 1 };
 
-    const card = focusCard;
-    const tile = focusOrigin;
-    focusCard = null;
-    focusOrigin = null;
-
-    const rect = tile.getBoundingClientRect();
-    const tw = tile.offsetWidth;
-    const th = tile.offsetHeight;
-
-    animateCard(card, {
-      left: rect.left + (rect.width - tw) / 2,
-      top: rect.top + (rect.height - th) / 2,
-      width: tw,
-      height: th,
+    animateCamera(target, 560, () => {
+      camera.x = target.x;
+      camera.y = target.y;
+      camera.z = target.z;
+      focusActive = false;
+      camClosing = false;
+      document.body.classList.remove('has-focus');
+      engine.setCamera(camera.x, camera.y, 1);
     });
-
-    focusEl.classList.remove('is-open');
-    tile.classList.remove('is-focus-origin');
-    document.body.classList.remove('has-focus');
-
-    clearTimeout(focusTimer);
-    focusTimer = setTimeout(() => {
-      if (document.body.classList.contains('has-focus')) return;
-      focusEl.hidden = true;
-      card.remove();
-    }, 620);
-
-    if (tile.isConnected) tile.focus({ preventScroll: true });
   };
 
-  focusScrim?.addEventListener('click', () => closeFocus());
+  document.addEventListener(
+    'pointerdown',
+    (event) => {
+      if (!focusActive) return;
+      closeFocus();
+      event.stopPropagation();
+    },
+    true
+  );
 
   let focusResize = 0;
   window.addEventListener('resize', () => {
     clearTimeout(focusResize);
     focusResize = setTimeout(() => {
-      if (focusCard) closeFocus();
+      if (!focusActive) return;
+      cancelAnimationFrame(camFrame);
+      const target = prevCamera || { x: 0, y: 0, z: 1 };
+      camera.x = target.x;
+      camera.y = target.y;
+      camera.z = 1;
+      focusActive = false;
+      camClosing = false;
+      document.body.classList.remove('has-focus');
+      engine.setCamera(camera.x, camera.y, 1);
     }, 120);
   });
 
-  document.addEventListener('pointerdown', (event) => {
-    if (!focusCard) return;
-    if (focusEl.contains(event.target)) return;
-    closeFocus();
+  $('collage-wall')?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const tile = event.target.closest('.tile');
+    if (!tile || focusActive) return;
+    event.preventDefault();
+    openFocus(tile);
   });
 
   /* --------------------------- library drawer UI -------------------------- */
@@ -439,7 +386,7 @@
     }
     syncControls();
     refreshLibraryUI();
-    resetPan();
+    resetView();
     renderWall();
     if (message) notify(message);
   };
@@ -474,9 +421,6 @@
   };
 
   const sliderOutput = {
-    density: (v) => t('unit.tiles', { n: v }),
-    tilt: (v) => t('unit.deg', { n: Number(v).toFixed(1) }),
-    gap: (v) => t('unit.px', { n: v }),
     dim: (v) => t('unit.percent', { n: v }),
     blur: (v) => t('unit.px', { n: v }),
   };
@@ -491,7 +435,8 @@
 
   const refreshTileLabels = () => {
     document.querySelectorAll('.tile').forEach((tile) => {
-      tile.setAttribute('aria-label', ariaFor(tile.dataset.label));
+      const name = tile.dataset.label;
+      tile.setAttribute('aria-label', name ? `${t('lightbox.open')} · ${name}` : t('lightbox.open'));
     });
   };
 
@@ -508,7 +453,6 @@
     const languageChanged = ensureLanguage();
     const root = document.documentElement;
 
-    root.style.setProperty('--tile-radius', `${settings.radius}px`);
     root.style.setProperty('--bg-blur', `${settings.blur}px`);
     root.style.setProperty('--dim', String(settings.dim / 100));
     root.style.setProperty('--grain-opacity', settings.grain ? '0.06' : '0');
@@ -522,7 +466,6 @@
       if (out && sliderOutput[id]) out.textContent = sliderOutput[id](settings[id]);
     }
 
-    syncSeg('radius-seg', settings.radius);
     syncSeg('lang-seg', settings.language);
 
     const grainToggle = $('grain');
@@ -543,11 +486,8 @@
     settings = { ...settings, ...partial };
     const languageChanged = syncControls();
     if (languageChanged) refreshLibraryUI();
-    if (options.wall) scheduleWall();
     if (options.save !== false) persist(options.immediateSave);
   };
-
-  /* --------------------------- control bindings --------------------------- */
 
   for (const id of Object.keys(RANGES)) {
     const input = $(id);
@@ -555,7 +495,7 @@
     setRangeFill(input);
     input.addEventListener('input', () => {
       setRangeFill(input);
-      applySettings({ [id]: Number(input.value) }, { wall: WALL_KEYS.has(id) });
+      applySettings({ [id]: Number(input.value) });
     });
   }
 
@@ -569,12 +509,11 @@
     });
   };
 
-  bindSeg('radius-seg', (value) => applySettings({ radius: Number(value) }, { wall: false }));
-  bindSeg('lang-seg', (value) => applySettings({ language: value }, { wall: false }));
+  bindSeg('lang-seg', (value) => applySettings({ language: value }));
 
   const grainToggle = $('grain');
   grainToggle?.addEventListener('change', () =>
-    applySettings({ grain: grainToggle.checked }, { wall: false })
+    applySettings({ grain: grainToggle.checked })
   );
 
   document.querySelectorAll('.src-tab').forEach((tab) => {
@@ -608,7 +547,7 @@
         persist();
         syncControls();
         refreshLibraryUI();
-        resetPan();
+        resetView();
         renderWall();
         notify(
           failed
@@ -681,7 +620,7 @@
       persist();
       syncControls();
       refreshLibraryUI();
-      resetPan();
+      resetView();
       renderWall();
       if (urlInput) urlInput.value = '';
       notify(t('toast.urlAdded'));
@@ -715,7 +654,7 @@
           settings.collection = set.id;
           wallSeed = Math.floor(Math.random() * 1e6);
           persist();
-          resetPan();
+          resetView();
           syncControls();
           renderWall();
           notify(t('toast.collection', { name: setLabel(set.id) }));
@@ -740,10 +679,10 @@
       collection: currentCollection(),
       language: settings.language,
     };
-    wallSeed = Math.floor(Math.random() * 1e6);
-    resetPan();
-    applySettings({}, { immediateSave: true, wall: true });
+    resetView();
+    applySettings({}, { immediateSave: true });
     refreshLibraryUI();
+    renderWall();
     notify(t('toast.layoutReset'));
   });
 
@@ -751,7 +690,7 @@
 
   const shuffleWall = () => {
     wallSeed = Math.floor(Math.random() * 1e6);
-    resetPan();
+    resetView();
     renderWall();
     notify(t('toast.shuffled'));
   };
@@ -763,13 +702,13 @@
       (target.matches('input, select, textarea') || target.isContentEditable);
 
     if (event.key === 'Escape') {
-      if (focusCard) closeFocus();
+      if (focusActive) closeFocus();
       else if (isDrawerOpen()) setDrawer(false);
       else if (typing) target.blur();
       return;
     }
 
-    if (focusCard || isDrawerOpen() || typing) return;
+    if (focusActive || isDrawerOpen() || typing) return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
 
     if (event.key.toLowerCase() === 's') shuffleWall();
@@ -814,7 +753,7 @@
       buildChips();
       syncControls();
       refreshLibraryUI();
-      applyPan();
+      applyCamera();
       renderWall();
     } catch (err) {
       console.error('[lattice] boot failed', err);

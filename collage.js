@@ -1,14 +1,17 @@
 /**
- * collage.js — endless, virtualised photo wall.
+ * collage.js — endless masonry of non-overlapping photos.
  *
- * The wall is an infinite plane split into cells. Every cell deterministically
- * spawns one oversized, rotated tile (seeded by its coordinates + the wall
- * seed), so panning generates new photos forever without duplicates in view.
- * Only cells near the viewport are kept in the DOM.
+ * The plane is split into columns of a fixed pitch. Inside a column photos are
+ * stacked edge-to-edge (with a gap) at their natural aspect ratio, repeating
+ * with a per-column period so the wall can continue forever in both axes.
+ * Columns use different widths, horizontal insets and vertical phases, so no
+ * rows or seams line up and nothing ever covers anything else.
+ *
+ * Only the columns/items near the viewport are kept in the DOM.
  *
  * Public API (window.LatticeCollage):
- *   render({ images, count, tilt, gap, seed }) -> visible tile count
- *   setPan(x, y)
+ *   render({ images, seed }) -> visible tile count
+ *   setCamera(x, y, z)
  *   tileCount()
  */
 (() => {
@@ -16,6 +19,9 @@
 
   const wall = document.getElementById('collage-wall');
   const collage = document.getElementById('collage');
+
+  const GAP = 12;
+  const ITEMS_PER_PERIOD = 7;
 
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
@@ -27,7 +33,6 @@
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 
-  /** Stable 32-bit hash for a cell coordinate + wall seed. */
   const hashCell = (x, y, seed) => {
     let h = Math.imul(x, 374761393) ^ Math.imul(y, 668265263) ^ Math.imul(seed, 2246822519);
     h = Math.imul(h ^ (h >>> 13), 1274126177);
@@ -36,57 +41,71 @@
 
   const state = {
     images: [],
-    count: 24,
-    tilt: 3,
-    gap: 8,
     seed: 1,
-    cell: 240,
-    panX: 0,
-    panY: 0,
+    pitch: 320,
+    cam: { x: 0, y: 0, z: 1 },
   };
 
-  /** key "cx:cy" -> tile element */
+  /** key "column:period:index" -> tile */
   const tiles = new Map();
+  /** column index -> layout */
+  const columns = new Map();
+
   let updateFrame = 0;
   let lastRange = '';
 
-  const cellSize = () => {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    return clamp(Math.round(Math.sqrt((vw * vh) / Math.max(4, state.count))), 130, 620);
+  const computePitch = () => clamp(Math.round(window.innerWidth / 4.4), 210, 430);
+
+  const getColumn = (index) => {
+    const cached = columns.get(index);
+    if (cached) return cached;
+
+    const rand = mulberry32(hashCell(index, 0, state.seed));
+    const pitch = state.pitch;
+    const available = Math.max(140, pitch - GAP);
+    const columnWidth = available * (0.84 + rand() * 0.16);
+    const slack = Math.max(0, pitch - GAP - columnWidth);
+    const baseX = GAP * 0.5 + slack * rand() * 0.5;
+
+    const items = [];
+    let cursor = 0;
+
+    for (let k = 0; k < ITEMS_PER_PERIOD; k += 1) {
+      const itemRand = mulberry32(hashCell(index, k + 1, state.seed));
+      const image = state.images[Math.floor(itemRand() * state.images.length)];
+      if (!image) continue;
+
+      const aspect = clamp(image.h ? image.w / image.h : 1, 0.6, 1.8);
+      // width varies a little inside the column, height keeps the photo's
+      // natural aspect so the whole image is visible (no cropping)
+      const width = columnWidth * (0.95 + itemRand() * 0.05);
+      const height = width / aspect;
+      const x = baseX + (columnWidth - width) * itemRand();
+      const gap = GAP * (0.9 + itemRand() * 0.5);
+
+      items.push({
+        image,
+        aspect,
+        x,
+        width,
+        height,
+        gap,
+        offsetY: cursor,
+        hue: Math.round(itemRand() * 360),
+      });
+
+      cursor += height + gap;
+    }
+
+    const height = Math.max(1, cursor);
+    const phase = height * (0.1 + rand() * 0.8);
+
+    const column = { x: index * pitch, items, height, phase };
+    columns.set(index, column);
+    return column;
   };
 
-  const createTile = (cx, cy) => {
-    const rand = mulberry32(hashCell(cx, cy, state.seed));
-    const image = state.images[Math.floor(rand() * state.images.length)];
-    if (!image) return null;
-
-    const cell = state.cell;
-    const aspect = clamp(image.h ? image.w / image.h : 1, 0.66, 1.52);
-
-    let width = cell * (1.16 + rand() * 0.66);
-    let height = width / aspect;
-
-    // guarantee coverage of the cell, then let gap create breathing room
-    const minHeight = cell * 1.1;
-    if (height < minHeight) {
-      width *= minHeight / height;
-      height = minHeight;
-    }
-    const maxHeight = cell * 2.2;
-    if (height > maxHeight) {
-      width *= maxHeight / height;
-      height = maxHeight;
-    }
-
-    width = Math.max(cell * 1.06, width - state.gap);
-    height = Math.max(cell * 1.06, height - state.gap);
-
-    const offsetX = (rand() - 0.5) * cell * 0.78;
-    const offsetY = (rand() - 0.5) * cell * 0.78;
-    const left = cx * cell + cell / 2 + offsetX - width / 2;
-    const top = cy * cell + cell / 2 + offsetY - height / 2;
-
+  const createTile = (image, rect, hue) => {
     const tile = document.createElement('figure');
     tile.className = 'tile is-entering';
     tile.tabIndex = 0;
@@ -94,13 +113,13 @@
     tile.setAttribute('aria-label', image.aria || image.label || '');
     tile.dataset.src = image.src;
     tile.dataset.label = image.label || '';
-    tile.style.left = `${left.toFixed(1)}px`;
-    tile.style.top = `${top.toFixed(1)}px`;
-    tile.style.width = `${width.toFixed(1)}px`;
-    tile.style.height = `${height.toFixed(1)}px`;
-    tile.style.zIndex = String(1 + Math.floor(rand() * 40));
-    tile.style.setProperty('--hue', String(Math.round(rand() * 360)));
-    tile.style.setProperty('--rot', `${((rand() * 2 - 1) * state.tilt).toFixed(2)}deg`);
+    tile.dataset.w = String(image.w || '');
+    tile.dataset.h = String(image.h || '');
+    tile.style.left = `${rect.x.toFixed(1)}px`;
+    tile.style.top = `${rect.y.toFixed(1)}px`;
+    tile.style.width = `${rect.w.toFixed(1)}px`;
+    tile.style.height = `${rect.h.toFixed(1)}px`;
+    tile.style.setProperty('--hue', String(hue));
 
     const frame = document.createElement('div');
     frame.className = 'tile__frame';
@@ -121,29 +140,55 @@
   };
 
   const update = () => {
+    if (state.cam.z > 1.001) return; // camera is zoomed in: keep the current set
+
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const cell = state.cell;
-    const margin = cell * 1.4;
+    const pitch = state.pitch;
 
-    const minCx = Math.floor((-state.panX - margin) / cell);
-    const maxCx = Math.floor((-state.panX + vw + margin) / cell);
-    const minCy = Math.floor((-state.panY - margin) / cell);
-    const maxCy = Math.floor((-state.panY + vh + margin) / cell);
+    const left = -state.cam.x;
+    const top = -state.cam.y;
+    const right = left + vw;
+    const bottom = top + vh;
 
-    const range = `${minCx}:${maxCx}:${minCy}:${maxCy}`;
+    const marginX = pitch * 0.35;
+    const marginY = 240;
+
+    const minIndex = Math.floor((left - marginX) / pitch);
+    const maxIndex = Math.floor((right + marginX) / pitch);
+
+    const range = `${minIndex}:${maxIndex}:${Math.round(top)}:${Math.round(bottom)}`;
     if (range === lastRange) return;
     lastRange = range;
 
     const alive = new Set();
 
-    for (let cy = minCy; cy <= maxCy; cy += 1) {
-      for (let cx = minCx; cx <= maxCx; cx += 1) {
-        const key = `${cx}:${cy}`;
-        alive.add(key);
-        if (!tiles.has(key)) {
-          const tile = createTile(cx, cy);
-          if (tile) {
+    for (let index = minIndex; index <= maxIndex; index += 1) {
+      const column = getColumn(index);
+      if (!column.items.length) continue;
+
+      const yTop = top - marginY - column.phase;
+      const yBottom = bottom + marginY - column.phase;
+      const firstPeriod = Math.floor(yTop / column.height);
+      const lastPeriod = Math.floor(yBottom / column.height);
+
+      for (let period = firstPeriod; period <= lastPeriod; period += 1) {
+        for (let k = 0; k < column.items.length; k += 1) {
+          const item = column.items[k];
+          const key = `${index}:${period}:${k}`;
+          alive.add(key);
+
+          if (!tiles.has(key)) {
+            const tile = createTile(
+              item.image,
+              {
+                x: column.x + item.x,
+                y: column.phase + period * column.height + item.offsetY,
+                w: item.width,
+                h: item.height,
+              },
+              item.hue
+            );
             tiles.set(key, tile);
             wall.appendChild(tile);
           }
@@ -170,16 +215,13 @@
     const images = Array.isArray(options.images) ? options.images.filter((i) => i && i.src) : [];
 
     state.images = images;
-    state.count = clamp(Math.round(options.count || 24), 4, 120);
-    state.tilt = clamp(Number(options.tilt) || 0, 0, 15);
-    state.gap = clamp(Math.round(options.gap ?? 8), 0, 60);
     state.seed = Math.round(options.seed ?? 1);
-    state.cell = cellSize();
+    state.pitch = computePitch();
 
     for (const tile of tiles.values()) tile.remove();
     tiles.clear();
+    columns.clear();
     lastRange = '';
-
     collage?.classList.toggle('is-empty', !images.length);
 
     if (!images.length) return 0;
@@ -188,25 +230,27 @@
     return tiles.size;
   };
 
-  const setPan = (x, y) => {
-    state.panX = x;
-    state.panY = y;
-    if (wall) wall.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0)`;
-    scheduleUpdate();
+  const setCamera = (x, y, z) => {
+    state.cam = { x, y, z };
+    if (wall) {
+      wall.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) scale(${z.toFixed(4)})`;
+    }
+    if (z <= 1.001) scheduleUpdate();
   };
 
   const refreshLayout = () => {
-    const cell = cellSize();
-    if (cell === state.cell) {
+    const pitch = computePitch();
+    if (pitch === state.pitch) {
       lastRange = '';
-      scheduleUpdate();
+      if (state.cam.z <= 1.001) scheduleUpdate();
       return;
     }
-    state.cell = cell;
+    state.pitch = pitch;
     for (const tile of tiles.values()) tile.remove();
     tiles.clear();
+    columns.clear();
     lastRange = '';
-    update();
+    if (state.cam.z <= 1.001) update();
   };
 
   let resizeFrame = 0;
@@ -217,7 +261,7 @@
 
   window.LatticeCollage = {
     render,
-    setPan,
+    setCamera,
     tileCount: () => tiles.size,
   };
 })();

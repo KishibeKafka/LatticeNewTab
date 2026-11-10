@@ -128,7 +128,7 @@
       'lightbox.counter': '{i} of {total}',
       'lightbox.open': 'Open photo',
       'collage.label': 'Endless photo wall',
-      'wall.note': 'Drag to explore the endless wall · click a photo to bring it forward.',
+      'wall.note': 'Drag to explore the endless wall · click a photo to centre and enlarge it.',
     },
 
     zh: {
@@ -252,7 +252,7 @@
       'lightbox.counter': '第 {i} / {total} 张',
       'lightbox.open': '查看照片',
       'collage.label': '无限照片墙',
-      'wall.note': '拖动画面无限浏览 · 点击照片将它移到中央放大',
+      'wall.note': '拖动画面无限浏览 · 点击照片把它移到中央放大',
     },
   };
 

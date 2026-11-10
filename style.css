@@ -6,9 +6,8 @@
    4. Atmosphere
    5. Settings button, scrim & drawer
    6. Drawer controls
-   7. Focus layer (in-place photo lift)
-   8. Buttons, toast, utilities
-   9. Motion & responsive
+   7. Buttons, toast, utilities
+   8. Motion & responsive
    ========================================================================== */
 
 /* ── 1. Tokens ──────────────────────────────────────────────────────────── */
@@ -132,16 +131,14 @@ svg {
 .collage__wall {
   position: absolute;
   inset: 0;
+  transform-origin: 0 0;
   will-change: transform;
 }
 
 .tile {
-  --rot: 0deg;
   position: absolute;
   margin: 0;
   border-radius: var(--tile-radius);
-  transform: rotate(var(--rot));
-  transform-origin: 50% 50%;
   contain: layout paint style;
   cursor: zoom-in;
   transition: opacity 0.35s var(--ease-standard);
@@ -166,6 +163,11 @@ svg {
 body.is-panning .collage,
 body.is-panning .tile {
   cursor: grabbing;
+}
+
+body.has-focus .collage,
+body.has-focus .tile {
+  cursor: zoom-out;
 }
 
 .tile__frame {
@@ -207,11 +209,6 @@ body.is-panning .tile {
 
 .tile.is-entering .tile__frame {
   animation: tile-in 0.6s var(--ease-emphasized) both;
-}
-
-.tile.is-focus-origin {
-  opacity: 0;
-  pointer-events: none;
 }
 
 /* ── 4. Atmosphere ─────────────────────────────────────────────────────── */
@@ -383,6 +380,13 @@ body.is-drawer-open .drawer {
   background: var(--hover);
   box-shadow: none;
   color: var(--ink);
+}
+
+.drawer__hint {
+  margin: 14px 0 2px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink-4);
 }
 
 .drawer__body {
@@ -834,55 +838,7 @@ body.is-drawer-open .drawer {
   outline-offset: 2px;
 }
 
-/* ── 7. Focus layer ────────────────────────────────────────────────────── */
-
-.focus {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  pointer-events: none;
-}
-
-.focus[hidden] {
-  display: none;
-}
-
-.focus__scrim {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(48% 48% at 50% 50%, rgba(16, 17, 22, 0.5) 0%, rgba(16, 17, 22, 0.72) 100%);
-  backdrop-filter: blur(6px) saturate(0.95);
-  -webkit-backdrop-filter: blur(6px) saturate(0.95);
-  opacity: 0;
-  pointer-events: auto;
-  transition: opacity 0.4s var(--ease-standard);
-}
-
-.focus.is-open .focus__scrim {
-  opacity: 1;
-}
-
-.focus__card {
-  position: absolute;
-  overflow: hidden;
-  border-radius: var(--tile-radius);
-  background: #1b1c22;
-  box-shadow:
-    0 40px 100px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(255, 255, 255, 0.16);
-  pointer-events: auto;
-  cursor: zoom-out;
-  will-change: left, top, width, height;
-}
-
-.focus__card img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-/* ── 8. Buttons, toast, utilities ──────────────────────────────────────── */
+/* ── 7. Buttons, toast, utilities ──────────────────────────────────────── */
 
 .btn {
   display: inline-flex;
@@ -977,7 +933,7 @@ body.is-drawer-open .drawer {
   border: 0;
 }
 
-/* ── 9. Motion & responsive ────────────────────────────────────────────── */
+/* ── 8. Motion & responsive ────────────────────────────────────────────── */
 
 @keyframes tile-in {
   from {
