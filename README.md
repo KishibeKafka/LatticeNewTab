@@ -30,6 +30,7 @@ expansion that re-gears only the block you clicked. English / 中文.
 | 11 | White wall background and shortcut editing | ✅ |
 | 12 | Shortcut row, drag reorder, custom icons | ✅ |
 | 13 | Auto / Light / Dark appearance | ✅ |
+| 14 | Search over the centre photo | ✅ |
 
 ## Features
 
@@ -48,7 +49,11 @@ expansion that re-gears only the block you clicked. English / 中文.
   Clicking another card switches the expansion, clicking the open card (or a
   gap / `Esc`) collapses it.
 - **Camera glide** — the camera pans to the expanded card; the expanded card
-  gets an inset white focus ring and an inner peach glow.
+  gets an inset focus ring and an inner peach glow.
+- **Search over the photo** — a frosted search pill sits in the middle of the
+  expanded photo and follows it as the card moves. Type a query and press Enter,
+  paste a URL to open it, or switch the chip between Google, Bing and
+  DuckDuckGo. `/` focuses the field; the chip's engine is remembered.
 - **Smart framing** — artwork fills the card's gear with `object-fit: cover`
   and a focus point (`object-position`). The focus point comes from the
   browser's `FaceDetector` when available and falls back to centre; the
@@ -152,6 +157,7 @@ the browser straight from their host.
 
 | Key | Action |
 | ---- | ------ |
+| `/` | Focus the centre search |
 | `S` | New random wall and expanded card |
 | `Enter` | Expand the focused card |
 | `Esc` | Collapse the expanded card / close settings |

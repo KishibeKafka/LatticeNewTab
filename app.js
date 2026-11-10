@@ -20,6 +20,7 @@
     dim: 0,
     blur: 0,
     theme: 'auto',
+    engine: 'google',
     source: 'curated',
     collection: 'classic',
     language: 'auto',
@@ -113,9 +114,11 @@
   let velocity = { x: 0, y: 0 };
   let drag = null;
   let lastViewport = { w: window.innerWidth, h: window.innerHeight };
+  let requestSearchLayout = () => {};
 
   const applyCamera = () => {
     engine.setCamera(camera.x, camera.y, camera.scale);
+    requestSearchLayout();
   };
 
   const targetForRect = (rect) => ({
@@ -240,7 +243,10 @@
 
     if (!moved) {
       if (tile) selectTile(tile);
-      else engine.collapse();
+      else {
+        engine.collapse();
+        requestSearchLayout();
+      }
       return;
     }
     if (Math.hypot(velocity.x, velocity.y) > 0.06) startInertia();
@@ -587,6 +593,94 @@
     editingIcon = '';
   });
 
+  /* ------------------------- centre search ------------------------------- */
+
+  const searchEl = $('center-search');
+  const searchFormEl = $('center-search-form');
+  const searchInputEl = $('center-search-input');
+  const engineSelectEl = $('center-engine');
+  const engineLabelEl = $('center-engine-label');
+
+  const ENGINES = {
+    google: { label: 'Google', url: 'https://www.google.com/search?q=' },
+    bing: { label: 'Bing', url: 'https://www.bing.com/search?q=' },
+    duckduckgo: { label: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=' },
+  };
+
+  let searchFrame = 0;
+
+  const scheduleCenterSearch = () => {
+    if (searchFrame) return;
+    searchFrame = requestAnimationFrame(() => {
+      searchFrame = 0;
+      layoutCenterSearch();
+    });
+  };
+
+  const layoutCenterSearch = () => {
+    if (!searchEl) return;
+    const rect = engine.activeRect ? engine.activeRect() : null;
+    if (!rect) {
+      searchEl.classList.remove('is-visible');
+      searchEl.setAttribute('aria-hidden', 'true');
+      return;
+    }
+
+    const scale = camera.scale;
+    const cardLeft = rect.x * scale + camera.x;
+    const cardTop = rect.y * scale + camera.y;
+    const cardW = rect.w * scale;
+    const cardH = rect.h * scale;
+
+    const narrow = window.innerWidth < 700;
+    const barH = narrow ? 46 : 54;
+    const maxW = narrow ? cardW - 20 : cardW - 36;
+    const barW = Math.max(200, Math.min(maxW, 560));
+
+    searchEl.style.width = `${Math.round(barW)}px`;
+    searchEl.style.height = `${barH}px`;
+    searchEl.style.left = `${Math.round(cardLeft + cardW / 2 - barW / 2)}px`;
+    searchEl.style.top = `${Math.round(cardTop + cardH / 2 - barH / 2)}px`;
+    searchEl.classList.add('is-visible');
+    searchEl.removeAttribute('aria-hidden');
+  };
+
+  requestSearchLayout = scheduleCenterSearch;
+
+  const looksLikeUrl = (value) => {
+    if (/\s/.test(value) || !value.includes('.')) return false;
+    return /^[a-z0-9-]+(\.[a-z0-9-]+)+([/:?#].*)?$/i.test(value);
+  };
+
+  const submitSearch = (raw) => {
+    const value = String(raw || '').trim();
+    if (!value) return;
+    if (/^https?:\/\//i.test(value)) {
+      window.location.href = value;
+      return;
+    }
+    if (looksLikeUrl(value)) {
+      window.location.href = `https://${value}`;
+      return;
+    }
+    const engine = ENGINES[settings.engine] || ENGINES.google;
+    window.location.href = engine.url + encodeURIComponent(value);
+  };
+
+  searchFormEl?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    submitSearch(searchInputEl?.value);
+  });
+
+  searchFormEl?.addEventListener('click', (event) => {
+    if (event.target.closest('.center-search__engine')) return;
+    searchInputEl?.focus();
+  });
+
+  engineSelectEl?.addEventListener('change', () => {
+    applySettings({ engine: engineSelectEl.value });
+  });
+
   /* ------------------------------- wall ---------------------------------- */
 
   const THEME_CACHE = 'lattice:theme';
@@ -644,6 +738,7 @@
     if (!tile) return;
     const rect = engine.expandTile(tile);
     if (rect) centerOnRect(rect, true);
+    else requestSearchLayout();
   };
 
   $('collage-wall')?.addEventListener('keydown', (event) => {
@@ -824,6 +919,14 @@
     syncSeg('lang-seg', settings.language);
     syncSeg('theme-seg', settings.theme);
     applyTheme();
+
+    const engineMeta = ENGINES[settings.engine] || ENGINES.google;
+    if (engineSelectEl) engineSelectEl.value = settings.engine;
+    if (engineLabelEl) engineLabelEl.textContent = engineMeta.label;
+    if (searchInputEl) {
+      searchInputEl.placeholder = t('search.placeholder', { engine: engineMeta.label });
+      searchInputEl.setAttribute('aria-label', t('search.inputAria'));
+    }
 
     document.querySelectorAll('.chip[data-collection]').forEach((chip) => {
       chip.classList.toggle(
@@ -1058,14 +1161,25 @@
     if (event.key === 'Escape') {
       if (isDrawerOpen()) setDrawer(false);
       else if (typing) target.blur();
-      else engine.collapse();
+      else {
+        engine.collapse();
+        requestSearchLayout();
+      }
       return;
     }
 
     if (isDrawerOpen() || typing) return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
 
-    if (event.key.toLowerCase() === 's') shuffleWall();
+    if (event.key === '/') {
+      if (searchEl && searchEl.classList.contains('is-visible')) {
+        event.preventDefault();
+        searchInputEl?.focus();
+        searchInputEl?.select();
+      }
+    } else if (event.key.toLowerCase() === 's') {
+      shuffleWall();
+    }
   });
 
   /* --------------------------------- boot --------------------------------- */
@@ -1093,6 +1207,8 @@
         if (['auto', 'en', 'zh'].includes(value)) clean[key] = value;
       } else if (key === 'theme') {
         if (['auto', 'light', 'dark'].includes(value)) clean[key] = value;
+      } else if (key === 'engine') {
+        if (ENGINES[value]) clean[key] = value;
       }
     }
     return clean;

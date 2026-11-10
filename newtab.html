@@ -32,6 +32,41 @@
     </button>
 
     <!-- ══════════════════════════════════════════════════════════════════
+         SEARCH — overlaid on the expanded centre photo
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="center-search" id="center-search" aria-hidden="true">
+      <form class="center-search__form" id="center-search-form" role="search" autocomplete="off">
+        <svg class="center-search__icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2" />
+          <path d="m15.4 15.4 4.1 4.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </svg>
+
+        <input
+          class="center-search__input"
+          id="center-search-input"
+          type="search"
+          placeholder="Search Google or type a URL"
+          data-i18n-aria="search.inputAria"
+          aria-label="Search"
+          spellcheck="false"
+        />
+
+        <label class="center-search__engine">
+          <span class="sr-only" data-i18n="search.engineAria">Search engine</span>
+          <span id="center-engine-label" aria-hidden="true">Google</span>
+          <svg class="center-search__caret" viewBox="0 0 12 12" aria-hidden="true">
+            <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <select class="center-search__engine-select" id="center-engine" data-i18n-aria="search.engineAria" aria-label="Search engine">
+            <option value="google">Google</option>
+            <option value="bing">Bing</option>
+            <option value="duckduckgo">DuckDuckGo</option>
+          </select>
+        </label>
+      </form>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
          SHORTCUTS — most-visited sites, in the usual new-tab row
          ══════════════════════════════════════════════════════════════════ -->
     <nav class="shortcuts" id="shortcuts" data-i18n-aria="shortcuts.label" hidden></nav>
