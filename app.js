@@ -34,6 +34,7 @@
 
   let settings = { ...DEFAULTS };
   let wallSeed = Math.floor(Math.random() * 1e6);
+  let shortcutsList = [];
   let toastTimer = 0;
   let appliedLanguage = null;
 
@@ -230,8 +231,12 @@
     document.body.classList.remove('is-panning');
 
     if (!moved) {
-      if (tile) selectTile(tile);
-      else engine.collapse();
+      if (tile) {
+        if (tile.dataset.type === 'shortcut') openShortcut(tile);
+        else selectTile(tile);
+      } else {
+        engine.collapse();
+      }
       return;
     }
     if (Math.hypot(velocity.x, velocity.y) > 0.06) startInertia();
@@ -267,11 +272,18 @@
     camera.scale = getScale();
     const rect = engine.render({
       images: pool.length ? decorate(pool, label) : [],
+      shortcuts: shortcutsList,
       seed: wallSeed,
       scale: camera.scale,
     });
     if (rect) centerOnRect(rect, false);
     else applyCamera();
+  };
+
+  const openShortcut = (tile) => {
+    const url = tile.dataset.url;
+    if (!url || !/^https?:/i.test(url)) return;
+    window.location.href = url;
   };
 
   const selectTile = (tile) => {
@@ -285,7 +297,8 @@
     const tile = event.target.closest('.tile');
     if (!tile) return;
     event.preventDefault();
-    selectTile(tile);
+    if (tile.dataset.type === 'shortcut') openShortcut(tile);
+    else selectTile(tile);
   });
 
   let resizeTimer = 0;
@@ -737,7 +750,12 @@
 
   const boot = async () => {
     try {
-      const [saved] = await Promise.all([store.get(SETTINGS_KEY), library.load()]);
+      const [saved, , shortcuts] = await Promise.all([
+        store.get(SETTINGS_KEY),
+        library.load(),
+        window.LatticeShortcuts ? window.LatticeShortcuts.load() : Promise.resolve([]),
+      ]);
+      shortcutsList = shortcuts || [];
       settings = sanitize(saved);
       if (settings.source === 'library' && library.counts().total === 0) {
         settings.source = 'curated';
