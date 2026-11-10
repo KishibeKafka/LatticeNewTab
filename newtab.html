@@ -1,140 +1,163 @@
 <!DOCTYPE html>
-<html lang="en" data-tone="dark">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="dark light" />
-    <title>Lattice</title>
+    <meta name="color-scheme" content="light" />
+    <title>New Tab</title>
     <link rel="icon" href="icons/icon128.png" />
+    <link rel="preconnect" href="https://picsum.photos" />
+    <link rel="preconnect" href="https://fastly.picsum.photos" crossorigin />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <!-- ══════════════════════════════════════════════════════════════════
-         1. COLLAGE LAYER — the album-art wall (tiles are injected by app.js)
+         1. COLLAGE LAYER — the photo wall (tiles are injected by collage.js)
          ══════════════════════════════════════════════════════════════════ -->
     <div class="collage" id="collage" aria-hidden="true">
       <div class="collage__wall" id="collage-wall"></div>
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════════
-         2. ATMOSPHERE — wash gradient, film grain, vignette
+         2. ATMOSPHERE — tone wash, film grain, legibility halo
          ══════════════════════════════════════════════════════════════════ -->
     <div class="atmosphere" aria-hidden="true">
       <div class="atmosphere__wash"></div>
-      <div class="atmosphere__glow"></div>
+      <div class="atmosphere__halo"></div>
       <div class="atmosphere__grain"></div>
       <div class="atmosphere__vignette"></div>
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════════
-         3. HUD — clock, date, search
+         3. HUD — clock, wordmark, search, shortcuts
          ══════════════════════════════════════════════════════════════════ -->
     <main class="hud" id="hud">
       <header class="hud__top">
-        <div class="brand">
-          <span class="brand__mark" aria-hidden="true">
-            <i></i><i></i><i></i>
-          </span>
-          <span class="brand__name">Lattice</span>
-        </div>
-        <p class="hud__tag" id="wall-meta">Curating your wall…</p>
+        <p class="hud__status" id="wall-meta">Loading your wall…</p>
+        <button class="icon-btn" id="open-settings" type="button" aria-label="Customize your new tab" aria-expanded="false" aria-controls="drawer">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="1.7" />
+            <path d="M19.4 14.4a1.6 1.6 0 0 0 .32 1.77l.06.06a1.94 1.94 0 1 1-2.74 2.74l-.06-.06a1.6 1.6 0 0 0-1.77-.32 1.6 1.6 0 0 0-.97 1.47v.17a1.94 1.94 0 1 1-3.88 0v-.09a1.6 1.6 0 0 0-1.05-1.47 1.6 1.6 0 0 0-1.77.32l-.06.06a1.94 1.94 0 1 1-2.74-2.74l.06-.06a1.6 1.6 0 0 0 .32-1.77 1.6 1.6 0 0 0-1.47-.97h-.17a1.94 1.94 0 1 1 0-3.88h.09a1.6 1.6 0 0 0 1.47-1.05 1.6 1.6 0 0 0-.32-1.77l-.06-.06a1.94 1.94 0 1 1 2.74-2.74l.06.06a1.6 1.6 0 0 0 1.77.32h.08a1.6 1.6 0 0 0 .97-1.47v-.17a1.94 1.94 0 1 1 3.88 0v.09a1.6 1.6 0 0 0 .97 1.47 1.6 1.6 0 0 0 1.77-.32l.06-.06a1.94 1.94 0 1 1 2.74 2.74l-.06.06a1.6 1.6 0 0 0-.32 1.77v.08a1.6 1.6 0 0 0 1.47.97h.17a1.94 1.94 0 1 1 0 3.88h-.09a1.6 1.6 0 0 0-1.47.97Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" />
+          </svg>
+        </button>
       </header>
 
       <section class="stage">
-        <p class="greeting" id="greeting" data-visible="true">Good evening</p>
+        <p class="greeting" id="greeting" data-visible="false">Good evening</p>
 
-        <h1 class="clock" id="clock">
+        <div class="clock" id="clock">
           <span class="clock__time" id="clock-time">00:00</span>
           <span class="clock__seconds" id="clock-seconds">00</span>
           <span class="clock__meridiem" id="clock-meridiem" hidden></span>
-        </h1>
+        </div>
 
         <p class="dateline">
-          <span id="date-line">Thursday, 1 January</span>
-          <span class="dateline__sep" aria-hidden="true"></span>
-          <span id="week-line">Week 1</span>
+          <span id="date-line">Monday, 1 January</span>
         </p>
 
+        <h1 class="wordmark" aria-label="Lattice">
+          <span style="--letter: #4285f4">L</span><span style="--letter: #ea4335">a</span><span style="--letter: #fbbc04">t</span><span style="--letter: #4285f4">t</span><span style="--letter: #34a853">i</span><span style="--letter: #ea4335">c</span><span style="--letter: #4285f4">e</span>
+        </h1>
+
         <form class="search" id="search-form" role="search" autocomplete="off">
-          <label class="search__engine">
-            <span class="sr-only">Search engine</span>
-            <span id="engine-label" aria-hidden="true">Google</span>
-            <select class="search__engine-select" id="engine-select" name="engine">
-              <option value="google">Google</option>
-              <option value="bing">Bing</option>
-              <option value="duckduckgo">DuckDuckGo</option>
-            </select>
-            <svg class="search__caret" viewBox="0 0 12 12" aria-hidden="true">
-              <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </label>
+          <svg class="search__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2" />
+            <path d="m15.4 15.4 4.1 4.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
 
           <input
             class="search__input"
             id="search-input"
             name="q"
             type="search"
-            placeholder="Search the web, or type a URL"
-            aria-label="Search query"
+            placeholder="Search Google or type a URL"
+            aria-label="Search"
             spellcheck="false"
           />
 
-          <button class="search__submit" type="submit" aria-label="Search">
-            <svg viewBox="0 0 20 20" aria-hidden="true">
-              <circle cx="9" cy="9" r="5.4" fill="none" stroke="currentColor" stroke-width="1.7" />
-              <path d="m13.2 13.2 3.6 3.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+          <label class="search__engine">
+            <span class="sr-only">Search engine</span>
+            <span id="engine-label" aria-hidden="true">Google</span>
+            <svg class="search__caret" viewBox="0 0 12 12" aria-hidden="true">
+              <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
-          </button>
+            <select class="search__engine-select" id="engine-select" name="engine">
+              <option value="google">Google</option>
+              <option value="bing">Bing</option>
+              <option value="duckduckgo">DuckDuckGo</option>
+            </select>
+          </label>
         </form>
 
-        <p class="hint" id="hint">
-          <kbd>/</kbd> to search
-          <span aria-hidden="true">·</span>
-          <kbd>S</kbd> to shuffle
-          <span aria-hidden="true">·</span>
-          <kbd>Esc</kbd> to close
-        </p>
+        <nav class="shortcuts" aria-label="Quick actions">
+          <button class="shortcut" id="shortcut-upload" type="button">
+            <span class="shortcut__tile">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 16V5m0 0L8 9m4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M4.5 14.5v2.7A2.3 2.3 0 0 0 6.8 19.5h10.4a2.3 2.3 0 0 0 2.3-2.3v-2.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+            </span>
+            <span class="shortcut__label" id="shortcut-upload-label">Upload</span>
+          </button>
+
+          <button class="shortcut" id="shortcut-url" type="button">
+            <span class="shortcut__tile">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M10 13.8a3.6 3.6 0 0 0 5.1 0l2.6-2.6a3.6 3.6 0 0 0-5.1-5.1l-1.3 1.3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                <path d="M14 10.2a3.6 3.6 0 0 0-5.1 0l-2.6 2.6a3.6 3.6 0 0 0 5.1 5.1l1.3-1.3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+            </span>
+            <span class="shortcut__label">Add URL</span>
+          </button>
+
+          <button class="shortcut" id="shortcut-curated" type="button">
+            <span class="shortcut__tile">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 3.6 14 9l5.4 2-5.4 2-2 5.4-2-5.4L4.6 11 10 9l2-5.4Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+                <path d="M18.6 16.6l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6.6-1.6Z" fill="currentColor" />
+              </svg>
+            </span>
+            <span class="shortcut__label">Explore</span>
+          </button>
+
+          <button class="shortcut" id="shortcut-shuffle" type="button">
+            <span class="shortcut__tile">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 7h3.4l9.2 10H20M4 17h3.4l2.6-2.8M20 7h-3.4l-1.8 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="m17.6 4.8 2.2 2.2-2.2 2.2M17.6 14.8l2.2 2.2-2.2 2.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </span>
+            <span class="shortcut__label">Shuffle</span>
+          </button>
+        </nav>
       </section>
 
       <footer class="hud__bottom">
-        <button class="ghost-btn" id="shuffle-btn" type="button">
-          <svg viewBox="0 0 20 20" aria-hidden="true">
-            <path d="M3 6h3.2l7.6 8H17M3 14h3.2l2.1-2.2M17 6h-3.1l-1.6 1.7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-            <path d="M15 4.2 17 6l-2 1.8M15 12.2 17 14l-2 1.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-          <span>Shuffle</span>
-        </button>
         <p class="hud__credit" id="credit">Photos from your library</p>
+        <button class="pill-btn" id="customize-pill" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 20h4.2L19 9.2a1.9 1.9 0 0 0 0-2.7l-1.5-1.5a1.9 1.9 0 0 0-2.7 0L4 15.8V20Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+            <path d="m13.9 6.6 3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.7" />
+          </svg>
+          <span>Customize</span>
+        </button>
       </footer>
     </main>
 
     <!-- ══════════════════════════════════════════════════════════════════
-         4. SETTINGS FAB + DRAWER
+         4. CUSTOMIZE DRAWER
          ══════════════════════════════════════════════════════════════════ -->
-    <button class="fab" id="open-settings" type="button" aria-label="Customize collage" aria-expanded="false" aria-controls="drawer">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path
-          d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z"
-          fill="none" stroke="currentColor" stroke-width="1.6"
-        />
-        <path
-          d="M19.4 14.4a1.6 1.6 0 0 0 .32 1.77l.06.06a1.94 1.94 0 1 1-2.74 2.74l-.06-.06a1.6 1.6 0 0 0-1.77-.32 1.6 1.6 0 0 0-.97 1.47v.17a1.94 1.94 0 1 1-3.88 0v-.09a1.6 1.6 0 0 0-1.05-1.47 1.6 1.6 0 0 0-1.77.32l-.06.06a1.94 1.94 0 1 1-2.74-2.74l.06-.06a1.6 1.6 0 0 0 .32-1.77 1.6 1.6 0 0 0-1.47-.97h-.17a1.94 1.94 0 1 1 0-3.88h.09a1.6 1.6 0 0 0 1.47-1.05 1.6 1.6 0 0 0-.32-1.77l-.06-.06a1.94 1.94 0 1 1 2.74-2.74l.06.06a1.6 1.6 0 0 0 1.77.32h.08a1.6 1.6 0 0 0 .97-1.47v-.17a1.94 1.94 0 1 1 3.88 0v.09a1.6 1.6 0 0 0 .97 1.47 1.6 1.6 0 0 0 1.77-.32l.06-.06a1.94 1.94 0 1 1 2.74 2.74l-.06.06a1.6 1.6 0 0 0-.32 1.77v.08a1.6 1.6 0 0 0 1.47.97h.17a1.94 1.94 0 1 1 0 3.88h-.09a1.6 1.6 0 0 0-1.47.97Z"
-          fill="none" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"
-        />
-      </svg>
-    </button>
-
     <div class="scrim" id="scrim"></div>
 
-    <aside class="drawer" id="drawer" aria-label="Customize your new tab" aria-hidden="true">
+    <aside class="drawer" id="drawer" tabindex="-1" aria-label="Customize your new tab" aria-hidden="true">
       <header class="drawer__head">
         <div>
-          <p class="drawer__eyebrow">Customize</p>
-          <h2 class="drawer__title">Your wall</h2>
+          <p class="drawer__eyebrow">Appearance</p>
+          <h2 class="drawer__title">Customize</h2>
         </div>
-        <button class="icon-btn" id="close-settings" type="button" aria-label="Close settings">
-          <svg viewBox="0 0 20 20" aria-hidden="true">
-            <path d="m5 5 10 10M15 5 5 15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+        <button class="icon-btn" id="close-settings" type="button" aria-label="Close">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
           </svg>
         </button>
       </header>
@@ -143,44 +166,47 @@
         <!-- ─── Source ─────────────────────────────────────────────── -->
         <section class="group">
           <div class="group__head">
-            <h3 class="group__label">Source</h3>
-            <span class="group__value" id="source-count">0 images</span>
+            <h3 class="group__label">Background</h3>
+            <span class="group__value" id="source-count">0 photos</span>
           </div>
 
           <div class="src-tabs" role="tablist" aria-label="Image source">
             <button class="src-tab is-active" type="button" role="tab" aria-selected="true" data-tab="upload">Upload</button>
             <button class="src-tab" type="button" role="tab" aria-selected="false" data-tab="url">URLs</button>
-            <button class="src-tab" type="button" role="tab" aria-selected="false" data-tab="curated">Curated</button>
+            <button class="src-tab" type="button" role="tab" aria-selected="false" data-tab="curated">Explore</button>
           </div>
 
           <!-- upload -->
           <div class="src-panel is-active" data-panel="upload">
             <label class="dropzone" id="dropzone" tabindex="0">
               <input type="file" id="file-input" accept="image/*" multiple hidden />
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 16V5m0 0L8 9m4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
-                <path d="M4.5 14v3.2A2.3 2.3 0 0 0 6.8 19.5h10.4a2.3 2.3 0 0 0 2.3-2.3V14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-              </svg>
-              <span class="dropzone__title">Drop photos here</span>
-              <span class="dropzone__sub">or click to browse — JPG, PNG, WebP, AVIF</span>
+              <span class="dropzone__icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 16V5m0 0L8 9m4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M4.5 14.5v2.7A2.3 2.3 0 0 0 6.8 19.5h10.4a2.3 2.3 0 0 0 2.3-2.3v-2.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                </svg>
+              </span>
+              <span class="dropzone__title">Drop photos to add them</span>
+              <span class="dropzone__sub">JPG, PNG, WebP or AVIF · stored on this device</span>
             </label>
             <div class="thumbs" id="thumbs"></div>
+            <button class="text-btn" id="clear-library" type="button" hidden>Remove all photos</button>
           </div>
 
           <!-- urls -->
           <div class="src-panel" data-panel="url" hidden>
             <form class="url-row" id="url-form">
-              <input class="text-input" id="url-input" type="url" placeholder="https://images.unsplash.com/..." aria-label="Image URL" />
-              <button class="btn btn--solid" type="submit">Add</button>
+              <input class="text-input" id="url-input" type="url" placeholder="https://example.com/photo.jpg" aria-label="Image URL" />
+              <button class="btn btn--filled" type="submit">Add</button>
             </form>
-            <p class="micro">Hosted images load lazily and are cached by the browser.</p>
+            <p class="micro">Public image links work too — they are fetched by your browser, not by us.</p>
             <div class="thumbs" id="url-thumbs"></div>
           </div>
 
           <!-- curated -->
           <div class="src-panel" data-panel="curated" hidden>
             <div class="chips" id="collections"></div>
-            <p class="micro">Curated sets pull from Unsplash. Your own photos stay on this device.</p>
+            <p class="micro" id="collection-note">Classic is bundled and works offline. The other sets stream from the web; your own uploads never leave this device.</p>
           </div>
         </section>
 
@@ -191,9 +217,9 @@
           <div class="control">
             <div class="control__head">
               <label for="density">Density</label>
-              <output id="density-out">32 tiles</output>
+              <output id="density-out">24 photos</output>
             </div>
-            <input class="range" id="density" type="range" min="6" max="90" step="1" value="32" />
+            <input class="range" id="density" type="range" min="6" max="90" step="1" value="24" />
           </div>
 
           <div class="control">
@@ -207,9 +233,9 @@
           <div class="control">
             <div class="control__head">
               <label for="gap">Gap &amp; padding</label>
-              <output id="gap-out">14 px</output>
+              <output id="gap-out">12 px</output>
             </div>
-            <input class="range" id="gap" type="range" min="0" max="48" step="2" value="14" />
+            <input class="range" id="gap" type="range" min="0" max="40" step="2" value="12" />
           </div>
 
           <div class="control">
@@ -218,8 +244,8 @@
             </div>
             <div class="seg" role="group" aria-label="Corner radius" id="radius-seg">
               <button type="button" data-value="4">Sharp</button>
-              <button type="button" data-value="10" class="is-active">Soft</button>
-              <button type="button" data-value="18">Round</button>
+              <button type="button" data-value="12" class="is-active">Soft</button>
+              <button type="button" data-value="20">Round</button>
             </div>
           </div>
 
@@ -241,38 +267,27 @@
 
           <div class="control">
             <div class="control__head">
-              <label for="dim">Overlay</label>
-              <output id="dim-out">55%</output>
+              <label for="dim">Wash</label>
+              <output id="dim-out">26%</output>
             </div>
-            <input class="range" id="dim" type="range" min="0" max="90" step="1" value="55" />
+            <input class="range" id="dim" type="range" min="0" max="90" step="1" value="26" />
           </div>
 
           <div class="control">
             <div class="control__head">
               <label for="blur">Blur</label>
-              <output id="blur-out">3 px</output>
+              <output id="blur-out">1 px</output>
             </div>
-            <input class="range" id="blur" type="range" min="0" max="18" step="1" value="3" />
+            <input class="range" id="blur" type="range" min="0" max="18" step="1" value="1" />
           </div>
 
           <div class="control control--row">
             <div>
               <p class="control__title">Film grain</p>
-              <p class="control__desc">Analog texture over the wall</p>
+              <p class="control__desc">Subtle analog texture</p>
             </div>
             <label class="switch">
-              <input type="checkbox" id="grain" checked />
-              <span class="switch__track" aria-hidden="true"></span>
-            </label>
-          </div>
-
-          <div class="control control--row">
-            <div>
-              <p class="control__title">Light UI</p>
-              <p class="control__desc">Switch HUD to a bright palette</p>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="tone" />
+              <input type="checkbox" id="grain" />
               <span class="switch__track" aria-hidden="true"></span>
             </label>
           </div>
@@ -299,7 +314,7 @@
               <p class="control__desc">Show a live seconds counter</p>
             </div>
             <label class="switch">
-              <input type="checkbox" id="clock-seconds-toggle" checked />
+              <input type="checkbox" id="clock-seconds-toggle" />
               <span class="switch__track" aria-hidden="true"></span>
             </label>
           </div>
@@ -310,7 +325,7 @@
               <p class="control__desc">A soft hello above the clock</p>
             </div>
             <label class="switch">
-              <input type="checkbox" id="greeting-toggle" checked />
+              <input type="checkbox" id="greeting-toggle" />
               <span class="switch__track" aria-hidden="true"></span>
             </label>
           </div>
@@ -329,13 +344,15 @@
       </div>
 
       <footer class="drawer__foot">
-        <button class="btn" id="reset-btn" type="button">Reset</button>
-        <button class="btn btn--solid" id="done-btn" type="button">Done</button>
+        <button class="text-btn" id="reset-btn" type="button">Reset layout</button>
+        <button class="btn btn--filled" id="done-btn" type="button">Done</button>
       </footer>
     </aside>
 
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
+    <script src="store.js" defer></script>
+    <script src="library.js" defer></script>
     <script src="collage.js" defer></script>
     <script src="app.js" defer></script>
   </body>

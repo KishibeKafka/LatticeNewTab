@@ -1,30 +1,41 @@
 /**
- * app.js — HUD shell: clock, search, settings drawer, persistence.
- * The wall itself lives in collage.js.
+ * app.js — HUD + customize drawer wiring.
+ * Wall rendering lives in collage.js, photo storage in library.js.
  */
 (() => {
   'use strict';
 
   const $ = (id) => document.getElementById(id);
-  const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
-  const NUMERIC = new Set(['density', 'tilt', 'gap', 'radius', 'dim', 'blur']);
+  const store = window.LatticeStore;
+  const library = window.LatticeLibrary;
+  const engine = window.LatticeCollage;
 
-  /* ------------------------------ defaults ------------------------------- */
+  const SETTINGS_KEY = 'lattice:settings';
 
   const DEFAULTS = {
-    density: 32,
+    density: 24,
     tilt: 2,
-    gap: 14,
-    radius: 10,
+    gap: 12,
+    radius: 12,
     shape: 'mixed',
-    dim: 55,
-    blur: 3,
-    grain: true,
-    tone: 'dark',
+    dim: 26,
+    blur: 1,
+    grain: false,
     clock24: true,
-    seconds: true,
-    greeting: true,
+    seconds: false,
+    greeting: false,
     engine: 'google',
+    source: 'curated',
+    collection: 'classic',
+  };
+
+  const RANGES = {
+    density: [6, 90],
+    tilt: [0, 8],
+    gap: [0, 40],
+    radius: [4, 20],
+    dim: [0, 90],
+    blur: [0, 18],
   };
 
   const ENGINES = {
@@ -33,62 +44,26 @@
     duckduckgo: { label: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=' },
   };
 
+  const DELETE_ICON = `<svg viewBox="0 0 12 12" aria-hidden="true"><path d="m3 3 6 6M9 3 3 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+
   let settings = { ...DEFAULTS };
-
-  /* ------------------------------ storage -------------------------------- */
-
-  const HAS_CHROME_STORAGE =
-    typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local;
-
-  const store = {
-    async get(key) {
-      try {
-        if (HAS_CHROME_STORAGE) {
-          const bag = await chrome.storage.local.get(key);
-          return bag ? bag[key] : undefined;
-        }
-        const raw = localStorage.getItem(key);
-        return raw ? JSON.parse(raw) : undefined;
-      } catch (err) {
-        console.warn('[lattice] read failed', err);
-        return undefined;
-      }
-    },
-    async set(key, value) {
-      try {
-        if (HAS_CHROME_STORAGE) {
-          await chrome.storage.local.set({ [key]: value });
-          return;
-        }
-        localStorage.setItem(key, JSON.stringify(value));
-      } catch (err) {
-        console.warn('[lattice] write failed', err);
-      }
-    },
-  };
-
-  let saveTimer = 0;
-  const persist = (immediate = false) => {
-    clearTimeout(saveTimer);
-    const commit = () => store.set('lattice:settings', { ...settings });
-    if (immediate) commit();
-    else saveTimer = setTimeout(commit, 260);
-  };
+  let wallSeed = Math.floor(Math.random() * 1e6);
+  let toastTimer = 0;
 
   /* ------------------------------- toast --------------------------------- */
 
-  const toast = $('toast');
-  let toastTimer = 0;
-  const notify = (message, ms = 1900) => {
-    if (!toast) return;
-    toast.textContent = message;
-    toast.hidden = false;
-    requestAnimationFrame(() => toast.classList.add('is-visible'));
+  const toastEl = $('toast');
+
+  const notify = (message, ms = 2200) => {
+    if (!toastEl) return;
+    toastEl.textContent = message;
+    toastEl.hidden = false;
+    requestAnimationFrame(() => toastEl.classList.add('is-visible'));
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => {
-      toast.classList.remove('is-visible');
+      toastEl.classList.remove('is-visible');
       setTimeout(() => {
-        if (!toast.classList.contains('is-visible')) toast.hidden = true;
+        if (!toastEl.classList.contains('is-visible')) toastEl.hidden = true;
       }, 320);
     }, ms);
   };
@@ -99,7 +74,6 @@
   const secondsEl = $('clock-seconds');
   const meridiemEl = $('clock-meridiem');
   const dateEl = $('date-line');
-  const weekEl = $('week-line');
   const greetingEl = $('greeting');
 
   const dateFmt = new Intl.DateTimeFormat(undefined, {
@@ -107,14 +81,6 @@
     day: 'numeric',
     month: 'long',
   });
-
-  const isoWeek = (date) => {
-    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    const day = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - day);
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
-  };
 
   const greet = (hour) => {
     if (hour < 5) return 'Still up';
@@ -124,12 +90,11 @@
     return 'Good night';
   };
 
-  let lastRenderedMinute = -1;
+  let lastMinute = -1;
 
   const paintClock = (now = new Date()) => {
     const hour24 = now.getHours();
     const minute = now.getMinutes();
-    const second = now.getSeconds();
 
     let hour = hour24;
     let meridiem = '';
@@ -138,35 +103,27 @@
       hour = hour24 % 12 || 12;
     }
 
-    if (timeEl) {
-      timeEl.textContent = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-    }
-    if (secondsEl) secondsEl.textContent = String(second).padStart(2, '0');
-
+    const hourText = settings.clock24 ? String(hour).padStart(2, '0') : String(hour);
+    if (timeEl) timeEl.textContent = `${hourText}:${String(minute).padStart(2, '0')}`;
+    if (secondsEl) secondsEl.textContent = String(now.getSeconds()).padStart(2, '0');
     if (meridiemEl) {
       meridiemEl.textContent = meridiem;
       meridiemEl.hidden = !meridiem;
     }
 
-    // Date/greeting only need updating once a minute.
-    if (minute !== lastRenderedMinute) {
-      lastRenderedMinute = minute;
+    if (minute !== lastMinute) {
+      lastMinute = minute;
       if (dateEl) dateEl.textContent = dateFmt.format(now);
-      if (weekEl) weekEl.textContent = `Week ${isoWeek(now)}`;
-      if (greetingEl) {
-        greetingEl.textContent = greet(hour24);
-        greetingEl.dataset.visible = String(settings.greeting);
-      }
+      if (greetingEl) greetingEl.textContent = greet(hour24);
     }
   };
 
   const scheduleTick = () => {
     paintClock();
-    // Re-align to the top of every second so the counter never drifts.
     setTimeout(scheduleTick, 1000 - (Date.now() % 1000) + 8);
   };
 
-  /* ----------------------------- search form ----------------------------- */
+  /* ------------------------------- search -------------------------------- */
 
   const searchForm = $('search-form');
   const searchInput = $('search-input');
@@ -181,47 +138,186 @@
   const submitSearch = (rawValue) => {
     const value = rawValue.trim();
     if (!value) return;
-    if (looksLikeUrl(value)) {
-      const target = /^[a-z]+:\/\//i.test(value) ? value : `https://${value}`;
-      window.location.href = target;
+    if (/^https?:\/\//i.test(value)) {
+      window.location.href = value;
       return;
     }
-    const engine = ENGINES[settings.engine] || ENGINES.google;
-    window.location.href = engine.url + encodeURIComponent(value);
+    if (looksLikeUrl(value)) {
+      window.location.href = `https://${value}`;
+      return;
+    }
+    const selected = ENGINES[settings.engine] || ENGINES.google;
+    window.location.href = selected.url + encodeURIComponent(value);
   };
 
   /* ------------------------------- drawer -------------------------------- */
 
   const drawer = $('drawer');
   const scrim = $('scrim');
-  const fab = $('open-settings');
   const hud = $('hud');
   const closeBtn = $('close-settings');
+  const openBtn = $('open-settings');
+  const pillBtn = $('customize-pill');
 
-  const setDrawer = (open) => {
+  const activateTab = (name) => {
+    document.querySelectorAll('.src-tab').forEach((tab) => {
+      const active = tab.dataset.tab === name;
+      tab.classList.toggle('is-active', active);
+      tab.setAttribute('aria-selected', String(active));
+    });
+    document.querySelectorAll('.src-panel').forEach((panel) => {
+      const active = panel.dataset.panel === name;
+      panel.classList.toggle('is-active', active);
+      panel.hidden = !active;
+    });
+  };
+
+  const setDrawer = (open, tab) => {
     document.body.classList.toggle('is-drawer-open', open);
-    fab?.setAttribute('aria-expanded', String(open));
+    openBtn?.setAttribute('aria-expanded', String(open));
     drawer?.setAttribute('aria-hidden', String(!open));
     if (hud) hud.inert = open;
     if (open) {
-      closeBtn?.focus({ preventScroll: true });
+      if (tab) activateTab(tab);
+      drawer?.focus({ preventScroll: true });
     } else if (document.activeElement && drawer.contains(document.activeElement)) {
-      fab?.focus({ preventScroll: true });
+      pillBtn?.focus({ preventScroll: true });
     }
+  };
+
+  /* ------------------------------- wall ---------------------------------- */
+
+  const wallMeta = $('wall-meta');
+  const credit = $('credit');
+  const sourceCount = $('source-count');
+
+  const currentCollection = () => settings.collection || 'editorial';
+
+  const poolFor = () => {
+    const localPool = library.pool();
+    if (settings.source === 'library' && localPool.length) {
+      return { pool: localPool, label: 'your library', isLibrary: true };
+    }
+    return {
+      pool: library.curatedPool(currentCollection()),
+      label: library.curatedLabel(currentCollection()),
+      isLibrary: false,
+      isLocalSet: currentCollection() === 'classic',
+    };
+  };
+
+  const renderWall = () => {
+    const { pool, label, isLibrary, isLocalSet } = poolFor();
+    const tiles = engine.render({
+      images: pool,
+      count: settings.density,
+      tilt: settings.tilt,
+      gap: settings.gap,
+      shape: settings.shape,
+      seed: wallSeed,
+    });
+
+    if (wallMeta) wallMeta.textContent = `${tiles} tiles · ${label}`;
+    if (credit) {
+      if (isLibrary) credit.textContent = 'Photos from your library';
+      else if (isLocalSet) credit.textContent = 'Classic set · bundled offline';
+      else credit.textContent = 'Curated from picsum.photos';
+    }
+  };
+
+  let wallRaf = 0;
+  const scheduleRender = () => {
+    cancelAnimationFrame(wallRaf);
+    wallRaf = requestAnimationFrame(renderWall);
+  };
+
+  /* --------------------------- library drawer UI -------------------------- */
+
+  const thumbsEl = $('thumbs');
+  const urlThumbsEl = $('url-thumbs');
+  const clearBtn = $('clear-library');
+
+  const buildThumb = (item) => {
+    const figure = document.createElement('figure');
+    figure.className = 'thumb';
+
+    const img = document.createElement('img');
+    img.alt = item.name || 'Photo';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.src = library.thumbFor(item);
+    figure.appendChild(img);
+
+    const remove = document.createElement('button');
+    remove.className = 'thumb__remove';
+    remove.type = 'button';
+    remove.setAttribute('aria-label', `Remove ${item.name || 'photo'}`);
+    remove.innerHTML = DELETE_ICON;
+    remove.addEventListener('click', async () => {
+      await library.remove(item.id);
+      await afterLibraryChange(`${item.name || 'Photo'} removed`);
+    });
+    figure.appendChild(remove);
+
+    return figure;
+  };
+
+  const renderThumbList = (container, items) => {
+    if (!container) return;
+    container.replaceChildren(...items.map(buildThumb));
+  };
+
+  const updateSourceCount = () => {
+    if (!sourceCount) return;
+    if (settings.source === 'library') {
+      const total = library.counts().total;
+      sourceCount.textContent = `${total} photo${total === 1 ? '' : 's'}`;
+    } else {
+      const total = library.curatedCount(currentCollection());
+      sourceCount.textContent = `${total} photos`;
+    }
+  };
+
+  const refreshLibraryUI = () => {
+    const items = library.items();
+    renderThumbList(thumbsEl, items.filter((item) => item.kind === 'local'));
+    renderThumbList(urlThumbsEl, items.filter((item) => item.kind === 'url'));
+    if (clearBtn) clearBtn.hidden = items.length === 0;
+    updateSourceCount();
+  };
+
+  const afterLibraryChange = async (message) => {
+    if (settings.source === 'library' && library.counts().total === 0) {
+      settings.source = 'curated';
+      persist();
+    }
+    syncControls();
+    refreshLibraryUI();
+    renderWall();
+    if (message) notify(message);
+  };
+
+  /* ---------------------------- persistence ------------------------------ */
+
+  let saveTimer = 0;
+  const persist = (immediate = false) => {
+    clearTimeout(saveTimer);
+    const commit = () => store.set(SETTINGS_KEY, { ...settings });
+    if (immediate) commit();
+    else saveTimer = setTimeout(commit, 250);
   };
 
   /* ------------------------------ controls ------------------------------- */
 
-  const rangeIds = ['density', 'tilt', 'gap', 'dim', 'blur'];
-
   const setRangeFill = (input) => {
     const min = Number(input.min) || 0;
     const max = Number(input.max) || 100;
-    const pct = ((Number(input.value) - min) / (max - min)) * 100;
+    const pct = ((Number(input.value) - min) / (max - min || 1)) * 100;
     input.style.setProperty('--fill', `${pct}%`);
   };
 
-  const syncSeg = (container, value) => {
+  const syncSeg = (containerId, value) => {
+    const container = $(containerId);
     if (!container) return;
     container.querySelectorAll('button[data-value]').forEach((btn) => {
       const active = String(btn.dataset.value) === String(value);
@@ -230,57 +326,36 @@
     });
   };
 
-  const renderWall = () => {
-    window.LatticeCollage?.render({
-      count: settings.density,
-      tilt: settings.tilt,
-      gap: settings.gap,
-      radius: settings.radius,
-      shape: settings.shape,
-    });
+  const sliderOutput = {
+    density: (v) => `${v} photos`,
+    tilt: (v) => `${Number(v).toFixed(1)}°`,
+    gap: (v) => `${v} px`,
+    dim: (v) => `${v}%`,
+    blur: (v) => `${v} px`,
   };
 
-  let wallRaf = 0;
-  const scheduleWall = () => {
-    cancelAnimationFrame(wallRaf);
-    wallRaf = requestAnimationFrame(renderWall);
-  };
-
-  const applySettings = (partial = {}, options = {}) => {
-    settings = { ...settings, ...partial };
+  const syncControls = () => {
     const root = document.documentElement;
-
     root.style.setProperty('--tile-radius', `${settings.radius}px`);
-    root.style.setProperty('--tile-gap', `${settings.gap}px`);
-    root.style.setProperty('--tilt-max', `${settings.tilt}deg`);
     root.style.setProperty('--bg-blur', `${settings.blur}px`);
     root.style.setProperty('--dim', String(settings.dim / 100));
-    root.style.setProperty('--grain-opacity', settings.grain ? '0.05' : '0');
-    root.dataset.tone = settings.tone;
+    root.style.setProperty('--grain-opacity', settings.grain ? '0.06' : '0');
 
-    // sliders
-    for (const id of rangeIds) {
+    for (const id of Object.keys(RANGES)) {
       const input = $(id);
       if (!input) continue;
       input.value = String(settings[id]);
       setRangeFill(input);
       const out = $(`${id}-out`);
-      if (!out) continue;
-      if (id === 'density') out.textContent = `${settings.density} tiles`;
-      else if (id === 'tilt') out.textContent = `${Number(settings.tilt).toFixed(1)}°`;
-      else if (id === 'gap') out.textContent = `${settings.gap} px`;
-      else if (id === 'dim') out.textContent = `${settings.dim}%`;
-      else if (id === 'blur') out.textContent = `${settings.blur} px`;
+      if (out && sliderOutput[id]) out.textContent = sliderOutput[id](settings[id]);
     }
 
-    syncSeg($('radius-seg'), settings.radius);
-    syncSeg($('shape-seg'), settings.shape);
-    syncSeg($('engine-seg'), settings.engine);
+    syncSeg('radius-seg', settings.radius);
+    syncSeg('shape-seg', settings.shape);
+    syncSeg('engine-seg', settings.engine);
 
     const grainToggle = $('grain');
     if (grainToggle) grainToggle.checked = settings.grain;
-    const toneToggle = $('tone');
-    if (toneToggle) toneToggle.checked = settings.tone === 'light';
     const clock24Toggle = $('clock-24');
     if (clock24Toggle) clock24Toggle.checked = settings.clock24;
     const secondsToggle = $('clock-seconds-toggle');
@@ -291,32 +366,39 @@
     if (secondsEl) secondsEl.hidden = !settings.seconds;
     if (greetingEl) greetingEl.dataset.visible = String(settings.greeting);
 
+    const engineMeta = ENGINES[settings.engine] || ENGINES.google;
     if (engineSelect) engineSelect.value = settings.engine;
-    if (engineLabel) engineLabel.textContent = (ENGINES[settings.engine] || ENGINES.google).label;
+    if (engineLabel) engineLabel.textContent = engineMeta.label;
+    if (searchInput) searchInput.placeholder = `Search ${engineMeta.label} or type a URL`;
 
-    const countEl = $('source-count');
-    const poolSize = window.LatticeCollage?.poolSize?.();
-    if (countEl && poolSize) {
-      countEl.textContent = `${poolSize} image${poolSize === 1 ? '' : 's'}`;
-    }
+    document.querySelectorAll('.chip[data-collection]').forEach((chip) => {
+      chip.classList.toggle(
+        'is-active',
+        settings.source === 'curated' && chip.dataset.collection === currentCollection()
+      );
+    });
 
-    lastRenderedMinute = -1;
+    lastMinute = -1;
     paintClock();
+  };
 
-    if (options.rerender !== false) scheduleWall();
+  const applySettings = (partial = {}, options = {}) => {
+    settings = { ...settings, ...partial };
+    syncControls();
+    updateSourceCount();
+    if (options.rerender !== false) scheduleRender();
     if (options.save !== false) persist(options.immediateSave);
   };
 
-  /* ----------------------------- wiring: UI ------------------------------ */
+  /* --------------------------- control bindings --------------------------- */
 
-  for (const id of rangeIds) {
+  for (const id of Object.keys(RANGES)) {
     const input = $(id);
     if (!input) continue;
     setRangeFill(input);
     input.addEventListener('input', () => {
-      const value = Number(input.value);
       setRangeFill(input);
-      applySettings({ [id]: value });
+      applySettings({ [id]: Number(input.value) });
     });
   }
 
@@ -341,65 +423,209 @@
   };
 
   bindToggle('grain', (checked) => applySettings({ grain: checked }));
-  bindToggle('tone', (checked) => applySettings({ tone: checked ? 'light' : 'dark' }));
   bindToggle('clock-24', (checked) => applySettings({ clock24: checked }));
   bindToggle('clock-seconds-toggle', (checked) => applySettings({ seconds: checked }));
   bindToggle('greeting-toggle', (checked) => applySettings({ greeting: checked }));
 
   engineSelect?.addEventListener('change', () => applySettings({ engine: engineSelect.value }));
 
-  /* source tabs */
   document.querySelectorAll('.src-tab').forEach((tab) => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.src-tab').forEach((t) => {
-        const active = t === tab;
-        t.classList.toggle('is-active', active);
-        t.setAttribute('aria-selected', String(active));
-      });
-      document.querySelectorAll('.src-panel').forEach((panel) => {
-        const active = panel.dataset.panel === tab.dataset.tab;
-        panel.classList.toggle('is-active', active);
-        panel.hidden = !active;
-      });
+    tab.addEventListener('click', () => activateTab(tab.dataset.tab));
+  });
+
+  /* ------------------------------- sources -------------------------------- */
+
+  const dropzone = $('dropzone');
+  const fileInput = $('file-input');
+  let importing = false;
+
+  const handleFiles = async (fileList) => {
+    if (importing) return;
+    const files = Array.from(fileList || []).filter(
+      (file) => file && file.type && file.type.startsWith('image/')
+    );
+    if (!files.length) {
+      notify('No images in that selection');
+      return;
+    }
+
+    importing = true;
+    dropzone?.classList.add('is-busy');
+    notify(`Adding ${files.length} photo${files.length === 1 ? '' : 's'}…`, 60000);
+
+    try {
+      const { added, failed } = await library.addFiles(files);
+      if (added) {
+        settings.source = 'library';
+        persist();
+        syncControls();
+        refreshLibraryUI();
+        renderWall();
+        notify(
+          `Added ${added} photo${added === 1 ? '' : 's'}${
+            failed ? ` · ${failed} skipped` : ''
+          }`
+        );
+      } else {
+        notify('Could not read those images');
+      }
+    } catch (err) {
+      console.warn('[lattice] import failed', err);
+      notify('Could not add those photos');
+    } finally {
+      importing = false;
+      dropzone?.classList.remove('is-busy');
+      if (fileInput) fileInput.value = '';
+    }
+  };
+
+  fileInput?.addEventListener('change', () => handleFiles(fileInput.files));
+
+  dropzone?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      fileInput?.click();
+    }
+  });
+
+  ['dragenter', 'dragover'].forEach((type) => {
+    dropzone?.addEventListener(type, (event) => {
+      event.preventDefault();
+      dropzone.classList.add('is-drag');
     });
   });
 
-  /* search */
-  searchForm?.addEventListener('submit', (event) => {
-    event.preventDefault();
-    submitSearch(searchInput?.value ?? '');
+  ['dragleave', 'dragend'].forEach((type) => {
+    dropzone?.addEventListener(type, () => dropzone.classList.remove('is-drag'));
   });
 
-  /* drawer triggers */
-  fab?.addEventListener('click', () => setDrawer(true));
+  dropzone?.addEventListener('drop', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dropzone.classList.remove('is-drag');
+    handleFiles(event.dataTransfer?.files);
+  });
+
+  window.addEventListener('dragover', (event) => event.preventDefault());
+  window.addEventListener('drop', (event) => {
+    event.preventDefault();
+    if (!event.dataTransfer?.files?.length) return;
+    if (event.target.closest('#dropzone')) return;
+    setDrawer(true, 'upload');
+    handleFiles(event.dataTransfer.files);
+  });
+
+  const urlForm = $('url-form');
+  const urlInput = $('url-input');
+
+  urlForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const value = urlInput?.value.trim();
+    if (!value) return;
+
+    const submit = urlForm.querySelector('button[type="submit"]');
+    if (submit) submit.disabled = true;
+
+    try {
+      await library.addUrl(value);
+      settings.source = 'library';
+      persist();
+      syncControls();
+      refreshLibraryUI();
+      renderWall();
+      if (urlInput) urlInput.value = '';
+      notify('Image added to your wall');
+    } catch (err) {
+      notify(err.message || 'Could not add that image', 2800);
+    } finally {
+      if (submit) submit.disabled = false;
+    }
+  });
+
+  clearBtn?.addEventListener('click', async () => {
+    if (!window.confirm('Remove every photo from your library?')) return;
+    await library.clear();
+    await afterLibraryChange('Library cleared');
+  });
+
+  /* curated chips */
+  const collectionsEl = $('collections');
+
+  const buildChips = () => {
+    if (!collectionsEl) return;
+    collectionsEl.replaceChildren(
+      ...library.curatedList().map((set) => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'chip';
+        chip.dataset.collection = set.id;
+        chip.style.setProperty('--chip-color', set.color);
+        chip.textContent = `${set.label} · ${set.count}`;
+        chip.addEventListener('click', () => {
+          settings.source = 'curated';
+          settings.collection = set.id;
+          wallSeed = Math.floor(Math.random() * 1e6);
+          persist();
+          syncControls();
+          updateSourceCount();
+          renderWall();
+          notify(`${set.label} wall`);
+        });
+        return chip;
+      })
+    );
+  };
+
+  /* ---------------------------- shortcuts / FAB --------------------------- */
+
+  $('shortcut-shuffle')?.addEventListener('click', () => {
+    wallSeed = Math.floor(Math.random() * 1e6);
+    renderWall();
+    notify('Wall shuffled');
+  });
+
+  $('shortcut-upload')?.addEventListener('click', () => setDrawer(true, 'upload'));
+  $('shortcut-url')?.addEventListener('click', () => setDrawer(true, 'url'));
+  $('shortcut-curated')?.addEventListener('click', () => setDrawer(true, 'curated'));
+
+  openBtn?.addEventListener('click', () => setDrawer(true));
+  pillBtn?.addEventListener('click', () => setDrawer(true));
   closeBtn?.addEventListener('click', () => setDrawer(false));
   scrim?.addEventListener('click', () => setDrawer(false));
   $('done-btn')?.addEventListener('click', () => setDrawer(false));
 
   $('reset-btn')?.addEventListener('click', () => {
-    settings = { ...DEFAULTS };
+    const source = library.counts().total ? 'library' : 'curated';
+    settings = { ...DEFAULTS, source, collection: currentCollection() };
+    wallSeed = Math.floor(Math.random() * 1e6);
     applySettings({}, { immediateSave: true });
-    notify('Wall reset to defaults');
+    refreshLibraryUI();
+    notify('Layout reset');
   });
 
-  $('shuffle-btn')?.addEventListener('click', () => {
-    window.LatticeCollage?.shuffle();
-    notify('Wall shuffled');
+  /* -------------------------------- forms --------------------------------- */
+
+  searchForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    submitSearch(searchInput?.value ?? '');
   });
 
-  /* ---------------------------- keyboard --------------------------------- */
+  searchForm?.addEventListener('click', (event) => {
+    if (event.target.closest('.search__engine')) return;
+    searchInput?.focus();
+  });
+
+  /* ------------------------------- keyboard ------------------------------- */
 
   document.addEventListener('keydown', (event) => {
+    const target = event.target;
     const typing =
-      event.target instanceof HTMLElement &&
-      (event.target.matches('input, select, textarea') || event.target.isContentEditable);
+      target instanceof HTMLElement &&
+      (target.matches('input, select, textarea') || target.isContentEditable);
 
     if (event.key === 'Escape') {
-      if (document.body.classList.contains('is-drawer-open')) {
-        setDrawer(false);
-      } else if (typing) {
-        event.target.blur();
-      }
+      if (document.body.classList.contains('is-drawer-open')) setDrawer(false);
+      else if (typing) target.blur();
       return;
     }
 
@@ -410,25 +636,59 @@
       searchInput?.focus();
       searchInput?.select();
     } else if (event.key.toLowerCase() === 's') {
-      window.LatticeCollage?.shuffle();
+      wallSeed = Math.floor(Math.random() * 1e6);
+      renderWall();
       notify('Wall shuffled');
     }
   });
 
-  /* ------------------------------- boot --------------------------------- */
+  /* --------------------------------- boot --------------------------------- */
+
+  const sanitize = (saved) => {
+    const clean = { ...DEFAULTS };
+    if (!saved || typeof saved !== 'object') return clean;
+
+    for (const [key, fallback] of Object.entries(DEFAULTS)) {
+      if (!(key in saved)) continue;
+      const value = saved[key];
+
+      if (key in RANGES) {
+        const [min, max] = RANGES[key];
+        const num = Number(value);
+        if (Number.isFinite(num)) clean[key] = Math.min(max, Math.max(min, Math.round(num)));
+      } else if (typeof fallback === 'boolean') {
+        clean[key] = Boolean(value);
+      } else if (key === 'engine') {
+        if (ENGINES[value]) clean[key] = value;
+      } else if (key === 'shape') {
+        if (['mixed', 'square', 'portrait'].includes(value)) clean[key] = value;
+      } else if (key === 'source') {
+        if (['library', 'curated'].includes(value)) clean[key] = value;
+      } else if (key === 'collection') {
+        const known = library.curatedList().map((set) => set.id);
+        if (known.includes(value)) clean[key] = value;
+      }
+    }
+    return clean;
+  };
 
   const boot = async () => {
-    const saved = await store.get('lattice:settings');
-    if (saved && typeof saved === 'object') {
-      const clean = {};
-      for (const [key, value] of Object.entries(saved)) {
-        if (!(key in DEFAULTS)) continue;
-        clean[key] = NUMERIC.has(key) ? clamp(Number(value) || 0, 0, 999) : value;
+    try {
+      const [saved] = await Promise.all([store.get(SETTINGS_KEY), library.load()]);
+      settings = sanitize(saved);
+      if (settings.source === 'library' && library.counts().total === 0) {
+        settings.source = 'curated';
       }
-      settings = { ...DEFAULTS, ...clean };
+
+      buildChips();
+      syncControls();
+      refreshLibraryUI();
+      renderWall();
+      scheduleTick();
+    } catch (err) {
+      console.error('[lattice] boot failed', err);
+      notify('Something went wrong loading your wall');
     }
-    applySettings({}, { save: false });
-    scheduleTick();
   };
 
   boot();
