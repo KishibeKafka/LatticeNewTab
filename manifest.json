@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "Lattice — Photo Collage New Tab",
   "short_name": "Lattice",
-  "version": "0.2.0",
-  "description": "A Google-flavoured new tab with a fully customizable photo-collage wall. Use bundled photos, your own uploads or image links, then tune density, tilt and atmosphere.",
+  "version": "0.4.0",
+  "description": "An endless, draggable photo collage for your new tab. Bundled photos, your own uploads or image links; click any photo to bring it forward.",
   "minimum_chrome_version": "116",
   "chrome_url_overrides": {
     "newtab": "newtab.html"

@@ -1,12 +1,12 @@
 /* ==========================================================================
-   Lattice — Google-default inspired new tab
+   Lattice — endless photo wall
    1. Tokens
    2. Reset & base
-   3. Collage wall
+   3. Endless collage
    4. Atmosphere
-   5. HUD (status, clock, wordmark, search, shortcuts, footer)
-   6. Scrim & customize drawer
-   7. Drawer controls
+   5. Settings button, scrim & drawer
+   6. Drawer controls
+   7. Focus layer (in-place photo lift)
    8. Buttons, toast, utilities
    9. Motion & responsive
    ========================================================================== */
@@ -14,14 +14,10 @@
 /* ── 1. Tokens ──────────────────────────────────────────────────────────── */
 
 :root {
-  /* Google material palette */
   --blue: #1a73e8;
   --blue-ink: #1967d2;
   --blue-soft: #e8f0fe;
   --blue-tint: #f3f8ff;
-  --red: #ea4335;
-  --yellow: #fbbc04;
-  --green: #34a853;
 
   --surface: #ffffff;
   --surface-2: #f8f9fa;
@@ -38,25 +34,20 @@
 
   --shadow-1: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
   --shadow-2: 0 1px 3px rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
-  --shadow-pill: 0 1px 6px rgba(32, 33, 36, 0.28);
-  --shadow-pill-hover: 0 1px 8px rgba(60, 64, 67, 0.28), 0 2px 14px rgba(60, 64, 67, 0.12);
   --shadow-sheet: 0 16px 48px rgba(32, 33, 36, 0.3);
 
   /* user-tunable (written by app.js) */
   --tile-radius: 12px;
-  --tile-gap: 12px;
-  --tilt-max: 2deg;
-  --bg-blur: 2px;
-  --dim: 0.3;
+  --bg-blur: 0px;
+  --dim: 0;
   --grain-opacity: 0;
 
-  /* type */
-  --font-display: "Google Sans", "Product Sans", "Segoe UI Variable Display", "Segoe UI",
-    system-ui, "Helvetica Neue", Arial, sans-serif;
-  --font-ui: "Roboto", "Segoe UI Variable Text", "Segoe UI", system-ui, "Helvetica Neue",
+  --font-display: "Google Sans", "Product Sans", "PingFang SC", "Microsoft YaHei",
+    "Noto Sans SC", "Segoe UI Variable Display", "Segoe UI", system-ui, "Helvetica Neue",
     Arial, sans-serif;
+  --font-ui: "Roboto", "PingFang SC", "Microsoft YaHei", "Noto Sans SC",
+    "Segoe UI Variable Text", "Segoe UI", system-ui, "Helvetica Neue", Arial, sans-serif;
 
-  /* motion */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
 }
@@ -77,7 +68,7 @@ body {
 body {
   margin: 0;
   overflow: hidden;
-  background: #e8eaed;
+  background: #dde0e5;
   color: var(--ink);
   font-family: var(--font-ui);
   font-size: 15px;
@@ -124,23 +115,24 @@ svg {
   outline-offset: 2px;
 }
 
-/* ── 3. Collage wall ────────────────────────────────────────────────────── */
+/* ── 3. Endless collage ────────────────────────────────────────────────── */
 
 .collage {
   position: fixed;
   inset: 0;
   z-index: 0;
   overflow: hidden;
-  /* the matting colour shows through gaps and behind slow-loading tiles */
-  background: #e6e8eb;
-  transform: scale(1.04);
+  background: #dde0e5;
+  cursor: grab;
+  touch-action: none;
   filter: blur(var(--bg-blur)) saturate(1.02);
-  transition: filter 0.45s var(--ease-standard);
+  transition: filter 0.35s var(--ease-standard);
 }
 
 .collage__wall {
   position: absolute;
   inset: 0;
+  will-change: transform;
 }
 
 .tile {
@@ -151,6 +143,29 @@ svg {
   transform: rotate(var(--rot));
   transform-origin: 50% 50%;
   contain: layout paint style;
+  cursor: zoom-in;
+  transition: opacity 0.35s var(--ease-standard);
+}
+
+.tile:focus-visible {
+  outline: none;
+}
+
+.tile:focus-visible .tile__frame {
+  box-shadow:
+    0 0 0 3px #fff,
+    0 0 0 6px var(--blue);
+}
+
+.tile:hover .tile__frame {
+  box-shadow:
+    0 16px 34px -14px rgba(32, 33, 36, 0.5),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.75);
+}
+
+body.is-panning .collage,
+body.is-panning .tile {
+  cursor: grabbing;
 }
 
 .tile__frame {
@@ -158,15 +173,15 @@ svg {
   inset: 0;
   overflow: hidden;
   border-radius: inherit;
-  /* seeded warm/cool gradient keeps unloaded tiles looking intentional */
   background: linear-gradient(
     145deg,
     hsl(var(--hue, 210) 24% 86%),
     hsl(calc(var(--hue, 210) + 46) 30% 74%)
   );
   box-shadow:
-    0 8px 20px -10px rgba(32, 33, 36, 0.42),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+    0 10px 24px -12px rgba(32, 33, 36, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  transition: box-shadow 0.25s var(--ease-standard);
 }
 
 .tile__img {
@@ -191,16 +206,12 @@ svg {
 }
 
 .tile.is-entering .tile__frame {
-  animation: tile-in 0.7s var(--ease-emphasized) both;
-  animation-delay: var(--delay, 0ms);
+  animation: tile-in 0.6s var(--ease-emphasized) both;
 }
 
-.collage.is-empty .collage__wall {
-  background-image:
-    linear-gradient(rgba(32, 33, 36, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(32, 33, 36, 0.05) 1px, transparent 1px);
-  background-size: 96px 96px;
-  animation: lattice-drift 16s linear infinite;
+.tile.is-focus-origin {
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* ── 4. Atmosphere ─────────────────────────────────────────────────────── */
@@ -215,28 +226,9 @@ svg {
 .atmosphere__wash {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.92) 0%,
-    rgba(255, 255, 255, 0.42) 30%,
-    rgba(255, 255, 255, 0.48) 64%,
-    rgba(255, 255, 255, 0.94) 100%
-  );
+  background: linear-gradient(180deg, #ffffff 0%, #f7f8fa 45%, #ffffff 100%);
   opacity: var(--dim);
-  transition: opacity 0.4s linear;
-}
-
-/* soft white spotlight that keeps the dark HUD type legible on busy photos */
-.atmosphere__halo {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    56% 50% at 50% 45%,
-    rgba(255, 255, 255, 0.72) 0%,
-    rgba(255, 255, 255, 0.38) 46%,
-    rgba(255, 255, 255, 0) 76%
-  );
-  mix-blend-mode: screen;
+  transition: opacity 0.3s linear;
 }
 
 .atmosphere__grain {
@@ -252,69 +244,39 @@ svg {
 .atmosphere__vignette {
   position: absolute;
   inset: 0;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, transparent 18%),
-    linear-gradient(0deg, rgba(255, 255, 255, 0.55) 0%, transparent 16%),
-    radial-gradient(130% 110% at 50% 45%, transparent 52%, rgba(32, 33, 36, 0.13) 100%);
+  background: radial-gradient(130% 110% at 50% 45%, transparent 55%, rgba(24, 26, 33, 0.18) 100%);
 }
 
-/* ── 5. HUD ────────────────────────────────────────────────────────────── */
+/* ── 5. Settings button, scrim & drawer ────────────────────────────────── */
 
-.hud {
+.settings-btn {
   position: fixed;
-  inset: 0;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  padding: clamp(16px, 2.2vw, 26px) clamp(20px, 3vw, 34px);
-  pointer-events: none;
+  top: clamp(14px, 2vw, 22px);
+  right: clamp(14px, 2vw, 22px);
+  z-index: 20;
+  width: 44px;
+  height: 44px;
+  transition: opacity 0.25s var(--ease-standard);
+}
+
+body.is-drawer-open .settings-btn,
+body.has-focus .settings-btn {
   opacity: 0;
-  animation: hud-in 0.8s var(--ease-emphasized) 0.1s forwards;
-}
-
-.hud a,
-.hud button,
-.hud input,
-.hud select,
-.hud label {
-  pointer-events: auto;
-}
-
-.hud__top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex: 0 0 auto;
-}
-
-.hud__status {
-  display: inline-flex;
-  align-items: center;
-  height: 32px;
-  padding: 0 14px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.24);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  font-size: 12px;
-  color: var(--ink-3);
-  white-space: nowrap;
+  pointer-events: none;
 }
 
 .icon-btn {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
   border-radius: 50%;
   color: var(--ink-2);
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.82);
   box-shadow: var(--shadow-1);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  transition: background 0.2s var(--ease-standard), box-shadow 0.2s var(--ease-standard);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition:
+    background 0.2s var(--ease-standard),
+    box-shadow 0.2s var(--ease-standard);
 }
 
 .icon-btn svg {
@@ -330,304 +292,6 @@ svg {
 .icon-btn:active {
   background: var(--surface-3);
 }
-
-/* stage ---------------------------------------------------------------- */
-
-.stage {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  padding-bottom: clamp(18px, 4vh, 48px);
-  text-align: center;
-}
-
-.greeting {
-  margin-bottom: 10px;
-  font-size: 12px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9);
-  transition: opacity 0.25s var(--ease-standard), transform 0.25s var(--ease-standard);
-}
-
-.greeting[data-visible="false"] {
-  display: none;
-}
-
-.clock {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 6px;
-  margin-bottom: -6px;
-  font-family: var(--font-display);
-  font-size: clamp(2.4rem, 4.6vw, 3.3rem);
-  font-weight: 300;
-  line-height: 1;
-  letter-spacing: -0.02em;
-  color: var(--ink-2);
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9), 0 0 28px rgba(255, 255, 255, 0.7);
-}
-
-.clock__seconds,
-.clock__meridiem {
-  font-size: 0.36em;
-  font-weight: 400;
-  letter-spacing: 0.06em;
-  color: var(--ink-3);
-  transform: translateY(-0.9em);
-}
-
-.clock__meridiem {
-  letter-spacing: 0.14em;
-}
-
-.clock__seconds[hidden],
-.clock__meridiem[hidden] {
-  display: none;
-}
-
-.dateline {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--ink-3);
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9);
-}
-
-/* wordmark ------------------------------------------------------------- */
-
-.wordmark {
-  display: flex;
-  align-items: baseline;
-  margin-top: clamp(6px, 1.4vh, 14px);
-  font-family: var(--font-display);
-  font-size: clamp(2.6rem, 5vw, 3.6rem);
-  font-weight: 500;
-  line-height: 1;
-  letter-spacing: -0.045em;
-  user-select: none;
-  filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.55));
-}
-
-.wordmark span {
-  color: var(--letter);
-}
-
-/* search --------------------------------------------------------------- */
-
-.search {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: min(584px, 100%);
-  height: 52px;
-  margin-top: clamp(10px, 2vh, 20px);
-  border-radius: 999px;
-  background: var(--surface);
-  border: 1px solid transparent;
-  box-shadow: var(--shadow-pill);
-  transition:
-    box-shadow 0.22s var(--ease-standard),
-    border-color 0.22s var(--ease-standard);
-}
-
-.search:hover {
-  box-shadow: var(--shadow-pill-hover);
-}
-
-.search:focus-within {
-  border-color: var(--line);
-  box-shadow: 0 1px 8px rgba(60, 64, 67, 0.28), 0 2px 14px rgba(60, 64, 67, 0.14);
-}
-
-.search__icon {
-  flex: 0 0 auto;
-  width: 19px;
-  height: 19px;
-  margin-left: 18px;
-  color: var(--ink-3);
-}
-
-.search__input {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 100%;
-  padding: 0 12px 0 14px;
-  border: 0;
-  background: transparent;
-  font-size: 16px;
-  color: var(--ink);
-}
-
-.search__input::placeholder {
-  color: var(--ink-3);
-}
-
-.search__input:focus {
-  outline: none;
-}
-
-.search__input::-webkit-search-cancel-button {
-  display: none;
-}
-
-.search__engine {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 100%;
-  padding: 0 18px 0 10px;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--ink-3);
-  cursor: pointer;
-  transition: color 0.2s var(--ease-standard);
-}
-
-.search__engine:hover {
-  color: var(--ink);
-}
-
-.search__caret {
-  width: 10px;
-  height: 10px;
-  opacity: 0.75;
-}
-
-.search__engine-select {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  appearance: none;
-  -webkit-appearance: none;
-  border: 0;
-  cursor: pointer;
-}
-
-/* shortcuts ------------------------------------------------------------ */
-
-.shortcuts {
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  gap: clamp(14px, 2.4vw, 26px);
-  margin-top: clamp(14px, 2.6vh, 26px);
-}
-
-.shortcut {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  width: 76px;
-  color: var(--ink-2);
-}
-
-.shortcut__tile {
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: var(--surface);
-  color: var(--blue);
-  box-shadow: var(--shadow-1);
-  transition:
-    transform 0.2s var(--ease-standard),
-    box-shadow 0.2s var(--ease-standard);
-}
-
-.shortcut__tile svg {
-  width: 21px;
-  height: 21px;
-}
-
-.shortcut__label {
-  font-size: 12px;
-  color: var(--ink-2);
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9);
-  transition: color 0.2s var(--ease-standard);
-}
-
-.shortcut:hover .shortcut__tile {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-2);
-}
-
-.shortcut:hover .shortcut__label {
-  color: var(--ink);
-}
-
-.shortcut:active .shortcut__tile {
-  transform: scale(0.96);
-}
-
-/* footer --------------------------------------------------------------- */
-
-.hud__bottom {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex: 0 0 auto;
-}
-
-.hud__credit {
-  font-size: 12px;
-  color: var(--ink-3);
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.85);
-}
-
-.pill-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 40px;
-  padding: 0 16px;
-  border-radius: 999px;
-  background: var(--surface);
-  box-shadow: var(--shadow-1);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--ink-2);
-  transition:
-    box-shadow 0.2s var(--ease-standard),
-    background 0.2s var(--ease-standard),
-    transform 0.15s var(--ease-standard);
-}
-
-.pill-btn svg {
-  width: 17px;
-  height: 17px;
-  color: var(--blue);
-}
-
-.pill-btn:hover {
-  background: #fff;
-  box-shadow: var(--shadow-2);
-}
-
-.pill-btn:active {
-  transform: scale(0.97);
-}
-
-body.is-drawer-open .pill-btn,
-body.is-drawer-open .hud .icon-btn {
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* ── 6. Scrim & drawer ─────────────────────────────────────────────────── */
 
 .scrim {
   position: fixed;
@@ -781,7 +445,7 @@ body.is-drawer-open .drawer {
   border-top: 1px solid var(--line-2);
 }
 
-/* ── 7. Drawer controls ────────────────────────────────────────────────── */
+/* ── 6. Drawer controls ────────────────────────────────────────────────── */
 
 .src-tabs,
 .seg {
@@ -1057,8 +721,6 @@ body.is-drawer-open .drawer {
   color: var(--ink-4);
 }
 
-/* range ---------------------------------------------------------------- */
-
 .range {
   -webkit-appearance: none;
   appearance: none;
@@ -1073,11 +735,7 @@ body.is-drawer-open .drawer {
 .range::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    var(--blue) var(--fill, 50%),
-    var(--line) var(--fill, 50%)
-  );
+  background: linear-gradient(90deg, var(--blue) var(--fill, 50%), var(--line) var(--fill, 50%));
 }
 
 .range::-webkit-slider-thumb {
@@ -1120,8 +778,6 @@ body.is-drawer-open .drawer {
   border-radius: 50%;
   background: var(--blue);
 }
-
-/* switch --------------------------------------------------------------- */
 
 .switch {
   position: relative;
@@ -1176,6 +832,54 @@ body.is-drawer-open .drawer {
 .switch input:focus-visible + .switch__track {
   outline: 2px solid var(--blue);
   outline-offset: 2px;
+}
+
+/* ── 7. Focus layer ────────────────────────────────────────────────────── */
+
+.focus {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+
+.focus[hidden] {
+  display: none;
+}
+
+.focus__scrim {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(48% 48% at 50% 50%, rgba(16, 17, 22, 0.5) 0%, rgba(16, 17, 22, 0.72) 100%);
+  backdrop-filter: blur(6px) saturate(0.95);
+  -webkit-backdrop-filter: blur(6px) saturate(0.95);
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity 0.4s var(--ease-standard);
+}
+
+.focus.is-open .focus__scrim {
+  opacity: 1;
+}
+
+.focus__card {
+  position: absolute;
+  overflow: hidden;
+  border-radius: var(--tile-radius);
+  background: #1b1c22;
+  box-shadow:
+    0 40px 100px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.16);
+  pointer-events: auto;
+  cursor: zoom-out;
+  will-change: left, top, width, height;
+}
+
+.focus__card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 /* ── 8. Buttons, toast, utilities ──────────────────────────────────────── */
@@ -1241,7 +945,7 @@ body.is-drawer-open .drawer {
   position: fixed;
   left: 50%;
   bottom: 28px;
-  z-index: 40;
+  z-index: 45;
   padding: 10px 18px;
   border-radius: 8px;
   background: rgba(32, 33, 36, 0.94);
@@ -1275,25 +979,14 @@ body.is-drawer-open .drawer {
 
 /* ── 9. Motion & responsive ────────────────────────────────────────────── */
 
-@keyframes hud-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
 @keyframes tile-in {
   from {
     opacity: 0;
-    transform: translate3d(0, 18px, 0) scale(0.96);
+    transform: scale(0.96);
   }
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: scale(1);
   }
 }
 
@@ -1319,77 +1012,17 @@ body.is-drawer-open .drawer {
   }
 }
 
-@keyframes lattice-drift {
-  from {
-    background-position: 0 0, 0 0;
-  }
-  to {
-    background-position: 0 96px, 96px 0;
-  }
-}
-
-@media (max-width: 720px) {
-  .clock {
-    font-size: 2.4rem;
-  }
-
-  .wordmark {
-    font-size: 2.5rem;
-  }
-
-  .shortcuts {
-    gap: 12px;
-  }
-
-  .shortcut {
-    width: 68px;
-  }
-
-  .hud__status {
-    max-width: 58vw;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .search__engine {
-    padding-right: 14px;
-  }
-}
-
 @media (max-width: 420px) {
-  .shortcut__label {
-    font-size: 11px;
-  }
-
-  .hud__credit {
-    display: none;
-  }
-
   .drawer {
     top: 8px;
     right: 8px;
     bottom: 8px;
     border-radius: 12px;
   }
-}
 
-@media (max-height: 640px) {
-  .stage {
-    gap: 10px;
-    padding-bottom: 12px;
-  }
-
-  .clock {
-    font-size: 2rem;
-  }
-
-  .wordmark {
-    font-size: 2.2rem;
-  }
-
-  .shortcuts {
-    margin-top: 10px;
+  .settings-btn {
+    width: 40px;
+    height: 40px;
   }
 }
 
@@ -1400,9 +1033,5 @@ body.is-drawer-open .drawer {
     animation-duration: 0.001ms !important;
     animation-delay: 0ms !important;
     transition-duration: 0.001ms !important;
-  }
-
-  .collage {
-    transform: none;
   }
 }

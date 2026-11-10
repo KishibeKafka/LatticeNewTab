@@ -21,6 +21,12 @@
   const THUMB_EDGE = 320;
   const URL_TIMEOUT = 12000;
 
+  const fail = (code) => {
+    const error = new Error(code);
+    error.code = code;
+    throw error;
+  };
+
   /* --------------------------- curated sets ------------------------------ */
 
   const buildSet = (ids, sizes, query = '') =>
@@ -339,7 +345,9 @@
       const img = new Image();
       const timer = setTimeout(() => {
         img.src = '';
-        reject(new Error('Timed out'));
+        const error = new Error('timeout');
+        error.code = 'timeout';
+        reject(error);
       }, URL_TIMEOUT);
 
       img.onload = () => {
@@ -351,7 +359,9 @@
       };
       img.onerror = () => {
         clearTimeout(timer);
-        reject(new Error('Could not load image'));
+        const error = new Error('load-failed');
+        error.code = 'load-failed';
+        reject(error);
       };
       img.src = src;
     });
@@ -361,13 +371,13 @@
     try {
       parsed = new URL(String(rawUrl).trim());
     } catch {
-      throw new Error('That does not look like a link');
+      fail('bad-url');
     }
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      throw new Error('Only http(s) image links are supported');
+      fail('protocol');
     }
     if (items.some((item) => item.kind === 'url' && item.url === parsed.href)) {
-      throw new Error('That image is already on your wall');
+      fail('duplicate');
     }
 
     const { w, h } = await probeImage(parsed.href);
@@ -422,7 +432,7 @@
         const src = isLocal(item)
           ? objectUrl(item.id, 'blob', fullUrls)
           : item.url;
-        return src ? { src, w: item.w || 1200, h: item.h || 900 } : null;
+        return src ? { src, w: item.w || 1200, h: item.h || 900, name: item.name } : null;
       })
       .filter(Boolean);
 
