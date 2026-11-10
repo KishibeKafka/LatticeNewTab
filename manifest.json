@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Lattice — Photo Collage New Tab",
+  "short_name": "Lattice",
+  "version": "0.1.0",
+  "description": "A cinematic, fully customizable photo-collage wall for your new tab. Upload your own images, pick a curated mood, tune density, tilt and atmosphere.",
+  "minimum_chrome_version": "116",
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  },
+  "permissions": [
+    "storage",
+    "unlimitedStorage"
+  ],
+  "host_permissions": [
+    "https://images.unsplash.com/*",
+    "https://picsum.photos/*"
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "Lattice — open new tab settings"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
