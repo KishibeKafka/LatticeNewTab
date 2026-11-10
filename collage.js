@@ -1,19 +1,22 @@
 /**
- * collage.js — draggable infinite wall with in-place photo magnification.
+ * collage.js — draggable infinite wall + local spotlight patch.
  *
- * The wall is an endless, gap-free masonry of natural-aspect photos (square
- * corners, nothing cropped) that can be panned forever.
+ * Wall: endless gap-free masonry, draggable, virtualised. Every photo keeps its
+ * natural aspect ratio, so nothing is cropped.
  *
- * Above it sits a local patch of photos. Selecting a photo never moves any
- * tile: the chosen photo scales up around its own centre, the camera pans to
- * bring that centre to the middle of the screen, and only the photos that the
- * enlarged rectangle would cover shrink (around their own centres) to make
- * room. Everything else keeps its size and position. Because the patch sits on
- * top of the wall, the space freed by shrinking shows the wall photos behind.
+ * Patch: a world-anchored local composition around the selected photo. The
+ * centre is enlarged, and the space above/below is filled with full-width rows
+ * of complete photos; left/right are filled with columns whose photos stack to
+ * exactly the centre height. Photos keep their natural aspect, so they are
+ * never cropped.
+ *
+ * The surrounding photo order is stable: selecting a photo only swaps it with
+ * the current centre (or appends the old centre), so neighbourhood photos keep
+ * their slots and glide to their new rectangles instead of flying around.
  *
  * Public API:
- *   render({ images, selected, focus, seed }) -> centre of the selected tile
- *   selectTile(el) -> centre of the selected tile (or null)
+ *   render({ images, selected, focus, seed })
+ *   select({ selected, focus })
  *   setCamera(x, y)
  */
 (() => {
@@ -23,8 +26,11 @@
 
   const CYCLE = 8;
   const ITEMS_PER_PERIOD = 7;
-  const PATCH_SCALE = 1.5;
+  const PATCH_ROW_WIDTH = 1.5; // × viewport width
   const ROW_IMAGES = 5;
+  const SIDE_COLUMNS = 3;
+  const COLUMN_IMAGES = 2;
+  const SURROUND_SLOTS = ROW_IMAGES * 2 + SIDE_COLUMNS * COLUMN_IMAGES * 2;
 
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
@@ -44,23 +50,21 @@
 
   const state = {
     images: [],
+    selected: 0,
     seed: 1,
     cam: { x: 0, y: 0 },
+    focus: { x: 0, y: 0 },
     widths: [],
     prefix: [],
     periodWidth: 1,
     baseWidth: 320,
-    slots: [],
-    tiles: [],
-    selectedSlot: 0,
-    selectedImage: 0,
-    patchFocus: { x: 0, y: 0 },
+    order: [],
   };
 
   const aspectOf = (index) => {
     const image = state.images[index];
     if (!image) return 1;
-    return image.w && image.h && image.h > 0 ? image.w / image.h : 1;
+    return clamp(image.w && image.h ? image.w / image.h : 1, 0.45, 2.2);
   };
 
   /* ══════════════════════════ endless masonry ══════════════════════════ */
@@ -107,6 +111,7 @@
     const cycle = Math.floor(index / CYCLE);
     const pos = ((index % CYCLE) + CYCLE) % CYCLE;
     return {
+      pos,
       x: cycle * state.periodWidth + state.prefix[pos],
       width: state.widths[pos],
     };
@@ -127,14 +132,17 @@
       const image = state.images[imageIndex];
       if (!image) continue;
 
+      // height follows the natural aspect: nothing is cropped
       const aspect = aspectOf(imageIndex);
       const height = Math.max(60, width / aspect);
 
       items.push({
+        image,
         imageIndex,
         offsetY: cursor,
         width,
         height,
+        hue: (imageIndex * 47) % 360,
       });
 
       cursor += height;
@@ -152,14 +160,15 @@
     const image = state.images[imageIndex] || state.images[0];
     const tile = document.createElement('figure');
     tile.className = `tile tile--${kind}${meta.entering ? ' is-entering' : ''}`;
-    tile.tabIndex = 0;
-    tile.setAttribute('role', 'button');
+    tile.tabIndex = meta.center ? -1 : 0;
+    tile.setAttribute('role', meta.center ? 'img' : 'button');
     tile.setAttribute('aria-label', image.aria || image.label || '');
     tile.dataset.src = image.src;
     tile.dataset.label = image.label || '';
     tile.dataset.w = String(image.w || '');
     tile.dataset.h = String(image.h || '');
     tile.dataset.index = String(imageIndex);
+    tile.dataset.center = meta.center ? '1' : '0';
     tile.style.left = `${rect.x.toFixed(2)}px`;
     tile.style.top = `${rect.y.toFixed(2)}px`;
     tile.style.width = `${rect.w.toFixed(2)}px`;
@@ -174,7 +183,7 @@
     img.alt = '';
     img.decoding = 'async';
     img.draggable = false;
-    img.loading = kind === 'patch' ? 'eager' : 'lazy';
+    img.loading = meta.center ? 'eager' : 'lazy';
     img.addEventListener('load', () => img.classList.add('is-loaded'), { once: true });
     img.addEventListener('error', () => tile.classList.add('is-failed'), { once: true });
     img.src = image.src;
@@ -249,232 +258,284 @@
     });
   };
 
-  /* ═══════════════════════ local patch (above wall) ════════════════════ */
+  /* ═══════════════════════════ spotlight patch ═════════════════════════ */
 
-  const clearPatch = () => {
-    for (const item of state.tiles) item.el.remove();
-    state.tiles = [];
-    state.slots = [];
+  let patchTiles = [];
+  const leavingTimers = new Set();
+
+  const nextInOrder = (cursor) => {
+    if (!state.order.length) return state.selected;
+    const value = state.order[cursor % state.order.length];
+    return value;
   };
 
-  const buildPatch = (focus, selectedImage) => {
+  const buildPatchSlots = () => {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    const image = state.images[state.selected];
+    if (!image) return [];
 
-    clearPatch();
-    state.patchFocus = focus;
-    state.selectedImage = selectedImage;
+    const aspect = aspectOf(state.selected);
 
-    const rowW = Math.max(vw, 720) * 2;
-    const patchH = Math.max(vh, 720) * PATCH_SCALE;
-    const topLimit = focus.y - patchH / 2;
-    const bottomLimit = focus.y + patchH / 2;
-
-    const order = [];
-    for (let i = 0; i < state.images.length; i += 1) {
-      if (i !== selectedImage) order.push(i);
+    let centerW = Math.min(vw * (vw < 640 ? 0.72 : 0.64), vh * 0.76 * aspect);
+    let centerH = centerW / aspect;
+    const minBandY = Math.min(64, vh * 0.08);
+    if ((vh - centerH) / 2 < minBandY) {
+      centerH = vh - minBandY * 2;
+      centerW = centerH * aspect;
     }
-    const rand = mulberry32(hash(selectedImage, state.seed, 71));
-    for (let i = order.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(rand() * (i + 1));
-      [order[i], order[j]] = [order[j], order[i]];
+    if (centerW > vw * 0.88) {
+      centerW = vw * 0.88;
+      centerH = centerW / aspect;
     }
 
+    const center = {
+      x: state.focus.x - centerW / 2,
+      y: state.focus.y - centerH / 2,
+      w: centerW,
+      h: centerH,
+      imageIndex: state.selected,
+      center: true,
+    };
+
+    const slots = [center];
+    const rowWidth = Math.max(vw, 720) * PATCH_ROW_WIDTH;
     let cursor = 0;
+
     const take = () => {
-      if (!order.length) return selectedImage;
-      const value = order[cursor % order.length];
+      if (!state.order.length) return state.selected;
+      const index = state.order[cursor % state.order.length];
       cursor += 1;
-      return value;
+      return index;
     };
 
-    const rowOf = (images, y) => {
+    const laidRow = () => {
+      const indices = [];
       let aspectSum = 0;
-      for (const index of images) aspectSum += aspectOf(index);
-      const height = rowW / Math.max(0.001, aspectSum);
-      return { images, y, height };
+      for (let i = 0; i < ROW_IMAGES; i += 1) {
+        const index = take();
+        indices.push(index);
+        aspectSum += aspectOf(index);
+      }
+      const height = rowWidth / Math.max(0.001, aspectSum);
+      let x = state.focus.x - rowWidth / 2;
+      const items = [];
+      for (const index of indices) {
+        const width = height * aspectOf(index);
+        items.push({ index, x, width, height });
+        x += width;
+      }
+      return items;
     };
 
-    // hero row: two photos, the selected one, two photos — selected stays centred
-    const heroImages = [take(), take(), selectedImage, take(), take()];
-    let heroAspect = 0;
-    for (const index of heroImages) heroAspect += aspectOf(index);
-    const heroH = rowW / Math.max(0.001, heroAspect);
-
-    let selectedOffset = 0;
-    for (let i = 0; i < 2; i += 1) selectedOffset += heroH * aspectOf(heroImages[i]);
-    selectedOffset += (heroH * aspectOf(selectedImage)) / 2;
-
-    const rowLeft = focus.x - selectedOffset;
-    const heroY = focus.y - heroH / 2;
-
-    const rows = [rowOf(heroImages, heroY)];
-
-    let y = heroY;
-    while (y > topLimit) {
-      const images = [take(), take(), take(), take(), take()];
-      const row = rowOf(images, 0);
-      y -= row.height;
-      row.y = y;
-      rows.unshift(row);
+    // top row, flush against the centre
+    for (const item of laidRow()) {
+      slots.push({
+        x: item.x,
+        y: center.y - item.height,
+        w: item.width,
+        h: item.height,
+        imageIndex: item.index,
+        center: false,
+      });
     }
 
-    y = heroY + heroH;
-    while (y < bottomLimit) {
-      const images = [take(), take(), take(), take(), take()];
-      const row = rowOf(images, y);
-      rows.push(row);
-      y += row.height;
+    // bottom row, flush against the centre
+    for (const item of laidRow()) {
+      slots.push({
+        x: item.x,
+        y: center.y + centerH,
+        w: item.width,
+        h: item.height,
+        imageIndex: item.index,
+        center: false,
+      });
     }
 
-    const slots = [];
-    let selectedSlot = -1;
+    // side columns stack to exactly the centre height
+    const laidColumn = () => {
+      const indices = [];
+      let inverseSum = 0;
+      for (let i = 0; i < COLUMN_IMAGES; i += 1) {
+        const index = take();
+        indices.push(index);
+        inverseSum += 1 / aspectOf(index);
+      }
+      const width = centerH / Math.max(0.001, inverseSum);
+      const items = [];
+      let y = center.y;
+      for (const index of indices) {
+        const height = width / aspectOf(index);
+        items.push({ index, y, width, height });
+        y += height;
+      }
+      return items;
+    };
 
-    for (const row of rows) {
-      let x = rowLeft;
-      for (const index of row.images) {
-        const w = row.height * aspectOf(index);
-        if (index === selectedImage && selectedSlot < 0) {
-          selectedSlot = slots.length;
-        }
-        slots.push({ x, y: row.y, w, h: row.height, imageIndex: index });
-        x += w;
+    let x = center.x;
+    for (let c = 0; c < SIDE_COLUMNS; c += 1) {
+      const column = laidColumn();
+      x -= column[0].width;
+      for (const item of column) {
+        slots.push({
+          x,
+          y: item.y,
+          w: item.width,
+          h: item.height,
+          imageIndex: item.index,
+          center: false,
+        });
       }
     }
 
-    if (selectedSlot < 0) selectedSlot = 0;
-
-    state.slots = slots;
-    state.selectedSlot = selectedSlot;
-
-    state.tiles = slots.map((slot, index) => {
-      const el = makeTile(slot.imageIndex, slot, 'patch', { entering: true });
-      el.dataset.slot = String(index);
-      wall.appendChild(el);
-      return { el, slotIndex: index };
-    });
-
-    applySelection();
-    return selectedCenter();
-  };
-
-  const shrinkFactor = (slot, big, margin) => {
-    const cx = slot.x + slot.w / 2;
-    const cy = slot.y + slot.h / 2;
-    const hw = slot.w / 2;
-    const hh = slot.h / 2;
-    const dx = Math.abs(cx - big.cx);
-    const dy = Math.abs(cy - big.cy);
-
-    if (dx >= big.hw + hw || dy >= big.hh + hh) return 1;
-
-    const sx = (dx - big.hw - margin) / hw;
-    const sy = (dy - big.hh - margin) / hh;
-    const scale = Math.max(sx, sy);
-    return scale > 0 ? Math.min(1, scale) : 0;
-  };
-
-  const applySelection = () => {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const selected = state.slots[state.selectedSlot];
-    if (!selected) return;
-
-    const zoom = Math.max(
-      1.2,
-      Math.min((vw * 0.64) / selected.w, (vh * 0.76) / selected.h, 4)
-    );
-
-    const big = {
-      cx: selected.x + selected.w / 2,
-      cy: selected.y + selected.h / 2,
-      hw: (selected.w * zoom) / 2,
-      hh: (selected.h * zoom) / 2,
-    };
-
-    state.tiles.forEach((item, index) => {
-      const slot = state.slots[index];
-      const el = item.el;
-      el.classList.remove('is-selected');
-
-      if (index === state.selectedSlot) {
-        el.style.setProperty('--scale', zoom.toFixed(4));
-        el.style.opacity = '1';
-        el.style.pointerEvents = '';
-        el.classList.add('is-selected');
-        el.setAttribute('role', 'img');
-        el.tabIndex = -1;
-        return;
+    x = center.x + centerW;
+    for (let c = 0; c < SIDE_COLUMNS; c += 1) {
+      const column = laidColumn();
+      for (const item of column) {
+        slots.push({
+          x,
+          y: item.y,
+          w: item.width,
+          h: item.height,
+          imageIndex: item.index,
+          center: false,
+        });
       }
-
-      const scale = shrinkFactor(slot, big, 4);
-      el.style.setProperty('--scale', scale.toFixed(3));
-      el.style.opacity = scale < 0.1 ? '0' : '1';
-      el.style.pointerEvents = scale < 0.1 ? 'none' : '';
-      el.setAttribute('role', 'button');
-      el.tabIndex = 0;
-    });
-  };
-
-  const selectedCenter = () => {
-    const slot = state.slots[state.selectedSlot];
-    if (!slot) return null;
-    return { x: slot.x + slot.w / 2, y: slot.y + slot.h / 2 };
-  };
-
-  const selectTile = (el) => {
-    if (!el) return null;
-
-    if (el.classList.contains('tile--patch')) {
-      const slotIndex = Number(el.dataset.slot);
-      if (!Number.isInteger(slotIndex) || slotIndex === state.selectedSlot) return null;
-      state.selectedSlot = slotIndex;
-      state.selectedImage = state.slots[slotIndex].imageIndex;
-      applySelection();
-      return selectedCenter();
+      x += column[0].width;
     }
 
-    if (el.classList.contains('tile--wall')) {
-      const imageIndex = Number(el.dataset.index);
-      if (!Number.isInteger(imageIndex)) return null;
-      const focus = {
-        x: el.offsetLeft + el.offsetWidth / 2,
-        y: el.offsetTop + el.offsetHeight / 2,
-      };
-      return buildPatch(focus, imageIndex);
+    return slots;
+  };
+
+  const applyPatchSlot = (el, slot, imageIndex) => {
+    const image = state.images[imageIndex] || state.images[0];
+    el.style.left = `${slot.x.toFixed(2)}px`;
+    el.style.top = `${slot.y.toFixed(2)}px`;
+    el.style.width = `${slot.w.toFixed(2)}px`;
+    el.style.height = `${slot.h.toFixed(2)}px`;
+    el.dataset.index = String(imageIndex);
+    el.dataset.center = slot.center ? '1' : '0';
+    el.dataset.src = image.src;
+    el.dataset.label = image.label || '';
+    el.dataset.w = String(image.w || '');
+    el.dataset.h = String(image.h || '');
+    el.tabIndex = slot.center ? -1 : 0;
+    el.setAttribute('role', slot.center ? 'img' : 'button');
+    el.setAttribute('aria-label', image.aria || image.label || '');
+    el.classList.toggle('is-center', Boolean(slot.center));
+
+    const img = el.querySelector('.tile__img');
+    if (img && img.getAttribute('src') !== image.src) {
+      img.classList.remove('is-loaded');
+      img.src = image.src;
+    }
+  };
+
+  const buildPatch = () => {
+    const slots = buildPatchSlots();
+    const free = new Map();
+    for (const item of patchTiles) {
+      if (!free.has(item.imageIndex)) free.set(item.imageIndex, []);
+      free.get(item.imageIndex).push(item);
     }
 
-    return null;
+    const next = [];
+
+    for (const slot of slots) {
+      const queue = free.get(slot.imageIndex);
+      let tile = queue && queue.length ? queue.pop() : null;
+
+      if (tile) {
+        tile.el.classList.remove('is-leaving');
+        applyPatchSlot(tile.el, slot, slot.imageIndex);
+        tile.imageIndex = slot.imageIndex;
+        next.push(tile);
+      } else {
+        const el = makeTile(slot.imageIndex, { x: slot.x, y: slot.y, w: slot.w, h: slot.h }, 'patch', {
+          center: slot.center,
+          entering: true,
+        });
+        applyPatchSlot(el, slot, slot.imageIndex);
+        wall.appendChild(el);
+        next.push({ el, imageIndex: slot.imageIndex });
+      }
+    }
+
+    for (const [, list] of free) {
+      for (const tile of list) {
+        tile.el.classList.add('is-leaving');
+        const timer = setTimeout(() => {
+          tile.el.remove();
+          leavingTimers.delete(timer);
+        }, 380);
+        leavingTimers.add(timer);
+      }
+    }
+
+    patchTiles = next;
   };
 
   /* ═══════════════════════════ public API ══════════════════════════════ */
+
+  const buildOrder = () => {
+    const others = [];
+    for (let i = 0; i < state.images.length; i += 1) {
+      if (i !== state.selected) others.push(i);
+    }
+    const rand = mulberry32(hash(state.selected, state.seed, 53));
+    for (let i = others.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(rand() * (i + 1));
+      [others[i], others[j]] = [others[j], others[i]];
+    }
+    state.order = others.length ? others : [state.selected];
+  };
 
   const render = (options = {}) => {
     const images = Array.isArray(options.images) ? options.images.filter((i) => i && i.src) : [];
 
     state.images = images;
     state.seed = Math.round(options.seed ?? 1);
-    state.selectedImage = clamp(
-      Math.round(options.selected ?? 0),
-      0,
-      Math.max(0, images.length - 1)
-    );
+    state.focus = options.focus || {
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+    };
+    state.selected = clamp(Math.round(options.selected ?? 0), 0, Math.max(0, images.length - 1));
 
     buildWidths();
     for (const tile of wallTiles.values()) tile.remove();
     wallTiles.clear();
-    columns.clear();
+    for (const item of patchTiles) item.el.remove();
+    patchTiles = [];
     lastRange = '';
-    clearPatch();
+    columns.clear();
 
-    if (!images.length) return null;
+    if (!images.length) return 0;
 
+    buildOrder();
+    buildPatch();
     updateWall();
-    const focus = options.focus || {
-      x: window.innerWidth / 2,
-      y: window.innerHeight / 2,
-    };
-    return buildPatch(focus, state.selectedImage);
+    return patchTiles.length;
+  };
+
+  const select = (options = {}) => {
+    if (!state.images.length) return;
+    const selected = clamp(Math.round(options.selected ?? 0), 0, state.images.length - 1);
+    if (selected !== state.selected) {
+      const oldCenter = state.selected;
+      const at = state.order.indexOf(selected);
+      if (at > -1) {
+        // swap: the old centre takes the clicked photo's slot, everything else keeps its place
+        state.order[at] = oldCenter;
+      } else {
+        // clicked a wall photo: put the old centre in the outermost slot,
+        // leaving every other surrounding slot untouched
+        const insertAt = Math.min(state.order.length, SURROUND_SLOTS - 1);
+        state.order.splice(insertAt, 0, oldCenter);
+      }
+      state.selected = selected;
+    }
+    state.focus = options.focus || state.focus;
+    buildPatch();
   };
 
   const setCamera = (x, y) => {
@@ -487,14 +548,14 @@
     if (!state.images.length) return;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const focus = { x: vw / 2 - state.cam.x, y: vh / 2 - state.cam.y };
+    state.focus = { x: vw / 2 - state.cam.x, y: vh / 2 - state.cam.y };
     buildWidths();
     for (const tile of wallTiles.values()) tile.remove();
     wallTiles.clear();
     columns.clear();
     lastRange = '';
+    buildPatch();
     updateWall();
-    buildPatch(focus, state.selectedImage);
   };
 
   let resizeTimer = 0;
@@ -505,8 +566,8 @@
 
   window.LatticeCollage = {
     render,
-    selectTile,
+    select,
     setCamera,
-    tileCount: () => wallTiles.size + state.tiles.length,
+    tileCount: () => wallTiles.size + patchTiles.length,
   };
 })();

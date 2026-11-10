@@ -25,24 +25,26 @@ grows, and its neighbourhood reflows around it. **English / 中文.**
 | 7 | Centre spotlight with local reflow | ✅ |
 | 8 | Drag + click-to-centre + local reflow | ✅ |
 | 9 | Complete photos (no crop) and stable swap | ✅ |
-| 10 | In-place magnification, neighbours resize only | ✅ |
+| 10 | No photo ever covers another | ✅ |
 
 ## Features
 
 - **Endless draggable wall** — an infinite, virtualised masonry of columns with
   varying widths. Photos tile edge to edge, square corners, no gaps, no
   overlaps. Drag anywhere (with inertia) and new photos stream in.
-- **Nothing is cropped** — every photo, on the wall and around the centre, is
-  laid out at its own aspect ratio. Surrounding rows and columns are sized from
-  the images' aspect ratios, so each picture is shown complete.
-- **In-place magnification** — the selected photo grows around its own centre
-  (camera pans to put that centre on screen), and the photos that its enlarged
-  frame would cover shrink around their own centres to make room. Nothing else
-  moves: every tile keeps its base position, only its scale changes.
-- **Click to select** — clicking a photo magnifies it and pans the camera so it
-  is centred. Only overlapping neighbours resize; the rest keep their size and
-  position, so nothing flies around. There is no "exit": the wall always has a
-  magnified photo.
+- **Nothing is cropped and nothing is covered** — every photo, on the wall and
+  around the centre, is laid out at its own aspect ratio. The magnified photo
+  owns a real slot; rows and columns are re-packed around it so no photo ever
+  sits on top of another.
+- **Spotlight centre** — the selected photo is enlarged to the middle of the
+  screen at its natural aspect ratio. The photos around it are re-packed
+  gaplessly into the space above, below, left and right, forming a local
+  spotlight patch that lives in the world and scrolls with it.
+- **Click to select** — clicking a photo enlarges it, pans the camera so it is
+  centred, and reflows its neighbourhood. The surrounding order is stable:
+  only the clicked photo and the previous centre swap slots, so nearby photos
+  glide and resize slightly instead of flying around. There is no "exit": the
+  wall always has a selected centre.
 - **Drag + select together** — after selecting, keep dragging: the spotlight
   patch travels with the wall and the plain endless mosaic is revealed beyond
   it. Click a photo out there and the spotlight re-forms around it.
@@ -71,23 +73,24 @@ grows, and its neighbourhood reflows around it. **English / 中文.**
         infinite wall (gap-free masonry, draggable)
 ┌──────────────────────────────────────────────────────────────┐
 │                                                              │
-│      ┌────────────── patch of complete photos ───────────┐   │
-│      │  row of photos  ·  row of photos  ·  row …        │   │
-│      │  ┌──────────┐   ┌──────────────────┐              │   │
-│      │  │ neighbour│   │  MAGNIFIED PHOTO │  neighbours  │   │
-│      │  │ (scaled) │   │  (grows in place)│  (scaled)    │   │
-│      │  └──────────┘   └──────────────────┘              │   │
-│      │  row of photos  ·  row of photos  ·  row …        │   │
+│      ┌──────────────── spotlight patch ──────────────────┐   │
+│      │          row of complete photos (top)             │   │
+│      ├─────────┬────────────────────────┬────────────────┤   │
+│      │ columns │      CENTRE PHOTO      │    columns     │   │
+│      │ (full   │   (natural aspect)     │  (full height) │   │
+│      │  height)│                        │                │   │
+│      ├─────────┴────────────────────────┴────────────────┤   │
+│      │         row of complete photos (bottom)           │   │
 │      └───────────────────────────────────────────────────┘   │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-The patch is a world-anchored grid of justified rows: every rectangle matches
-its image's aspect ratio, so nothing is cropped. Selecting a photo scales its
-tile up in place; tiles whose rectangles fall inside the enlarged frame scale
-down around their own centres, revealing the endless wall behind. No tile
-changes its base position.
+Photos above and below the centre sit in justified rows; photos to the left and
+right sit in columns that stack to exactly the centre's height. Every rectangle
+matches its image's aspect ratio, so nothing is cropped. The patch is anchored
+in world coordinates, so the camera centres the selected photo and dragging
+moves the patch with the wall.
 
 ## Install (unpacked)
 
