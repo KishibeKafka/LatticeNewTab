@@ -24,7 +24,6 @@ expansion that re-gears only the block you clicked. English / 中文.
 | 7 | Block templates, reflections, viewport culling | ✅ |
 | 8 | 6×6 expansion with local block reflow | ✅ |
 | 9 | Glow / inner stroke, smart framing | ✅ |
-| 10 | Browser shortcuts as icon cards in the wall | ✅ |
 
 ## Features
 
@@ -48,11 +47,6 @@ expansion that re-gears only the block you clicked. English / 中文.
   and a focus point (`object-position`). The focus point comes from the
   browser's `FaceDetector` when available and falls back to centre; the
   mechanism mirrors folia's `cardArtwork` / avatar-focus idea.
-- **Browser shortcuts in the wall** — a few 2×2 cells of every block become
-  shortcut cards: the site's favicon and name on a dark badge. They come from
-  Chrome's most-visited sites (`topSites`) and fall back to a built-in list
-  (Gmail, YouTube, GitHub, Notion, Wikipedia, …). Clicking a card opens the
-  site; shortcuts re-gear with the rest of the block when it expands.
 - **Three sources**
   - **Upload** — drop or pick images; downscaled to 1800 px, re-encoded to WebP
     and stored in IndexedDB. Nothing leaves the device.
@@ -85,10 +79,6 @@ Clicking any card expands it at the photo's own aspect ratio; the rest of the
 block re-tiles around it and the camera centres it. The cards touch, so the
 wall reads as one seamless mosaic.
 
-## Permissions: `storage`, `unlimitedStorage`, `topSites` (most-visited
-shortcuts) and `favicon` (local favicon lookups via `/_favicon/`). Photo
-uploads never leave the device.
-
 ## Install (unpacked)
 
 1. Open `chrome://extensions` and enable **Developer mode**.
@@ -108,8 +98,7 @@ style.css                Material tokens, wall, cards, atmosphere, drawer
 i18n.js                  English/中文 dictionary + DOM applier
 store.js                 chrome.storage.local ⇄ localStorage adapter
 library.js               IndexedDB library, upload pipeline, curated sets
-shortcuts.js             most-visited sites + built-in shortcut fallbacks
-collage.js               block templates, shortcuts, culling, reflow, camera
+collage.js               block templates, culling, block reflow, camera
 app.js                   camera input, expansion, drawer, sources, persistence
 assets/defaults/         24 bundled photos (instant, offline)
 icons/                   generated PNG icons (16/32/48/128)
@@ -121,7 +110,6 @@ tools/fetch-defaults.mjs refreshes assets/defaults from Lorem Picsum
 
 | Data | Where | Notes |
 | ---- | ----- | ----- |
-| Shortcuts | `chrome.topSites` (permission `topSites`) | fallback list when empty |
 | Settings | `chrome.storage.local` → `lattice:settings` | clamped + validated on load |
 | Library metadata | `chrome.storage.local` → `lattice:library` | id, kind, dimensions, name |
 | Local photo blobs | IndexedDB `lattice-photos/photos` | WebP, max 1800 px, quality 0.82 |

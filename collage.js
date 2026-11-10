@@ -298,7 +298,6 @@
 
   const state = {
     images: [],
-    shortcuts: [],
     seed: 1,
     cam: { x: 0, y: 0, scale: 1 },
     active: null, // { col, row, slot }
@@ -310,62 +309,6 @@
   const photoAt = (col, row, slot) => {
     if (!state.images.length) return 0;
     return hash(col, row, slot, state.seed) % state.images.length;
-  };
-
-  /* -- shortcut cells -- */
-
-  const shortcutSlotCache = new Map();
-
-  const shortcutSlotsFor = (col, row) => {
-    const key = `${col}:${row}`;
-    const cached = shortcutSlotCache.get(key);
-    if (cached) return cached;
-
-    const template = ORIENTED[orientationOf(col, row, state.seed)];
-    const candidates = [];
-    template.forEach((slot, index) => {
-      if (slot.cols === 2 && slot.rows === 2) candidates.push(index);
-    });
-
-    if (!candidates.length) {
-      shortcutSlotCache.set(key, []);
-      return [];
-    }
-
-    const start = hash(col, row, 23, state.seed) % candidates.length;
-    const slots = [];
-    for (let i = 0; i < Math.min(2, candidates.length); i += 1) {
-      slots.push(candidates[(start + i) % candidates.length]);
-    }
-    shortcutSlotCache.set(key, slots);
-    return slots;
-  };
-
-  const shortcutAt = (col, row, slot) => {
-    if (!state.shortcuts.length) return null;
-    const slots = shortcutSlotsFor(col, row);
-    const position = slots.indexOf(slot);
-    if (position < 0) return null;
-    const base = hash(col, row, 29, state.seed);
-    return state.shortcuts[(base + position) % state.shortcuts.length];
-  };
-
-  const faviconFor = (shortcut) => {
-    try {
-      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
-        return chrome.runtime.getURL(
-          `/_favicon/?pageUrl=${encodeURIComponent(shortcut.url)}&size=64`
-        );
-      }
-    } catch (err) {
-      /* fall through */
-    }
-    try {
-      const host = new URL(shortcut.url).hostname;
-      return `https://www.google.com/s2/favicons?domain=${host}&sz=64`;
-    } catch (err) {
-      return '';
-    }
   };
 
   /* ── artwork focus (smart crop) ── */
@@ -427,7 +370,6 @@
     el.dataset.col = String(col);
     el.dataset.row = String(row);
     el.dataset.slot = String(slot);
-    el.dataset.type = 'photo';
     el.dataset.index = String(photoIndex);
     el.dataset.src = image.src;
     el.dataset.label = image.label || '';
@@ -461,82 +403,6 @@
     return el;
   };
 
-  const createShortcutTile = (col, row, slot, shortcut, rect) => {
-    const el = document.createElement('figure');
-    el.className = 'tile tile--shortcut is-entering';
-    el.tabIndex = 0;
-    el.setAttribute('role', 'link');
-    el.dataset.block = `${col}:${row}`;
-    el.dataset.col = String(col);
-    el.dataset.row = String(row);
-    el.dataset.slot = String(slot);
-    el.dataset.type = 'shortcut';
-    el.dataset.url = shortcut.url;
-    el.dataset.label = shortcut.title;
-    el.style.left = `${rect.x}px`;
-    el.style.top = `${rect.y}px`;
-    el.style.width = `${rect.w}px`;
-    el.style.height = `${rect.h}px`;
-
-    const frame = document.createElement('div');
-    frame.className = 'tile__frame';
-
-    const body = document.createElement('div');
-    body.className = 'shortcut';
-
-    const badge = document.createElement('span');
-    badge.className = 'shortcut__badge';
-
-    const letter = document.createElement('span');
-    letter.className = 'shortcut__letter';
-    letter.textContent = (shortcut.title || '?').trim().charAt(0).toUpperCase() || '?';
-
-    const icon = document.createElement('img');
-    icon.className = 'shortcut__icon';
-    icon.alt = '';
-    icon.decoding = 'async';
-    icon.src = faviconFor(shortcut);
-    icon.addEventListener('error', () => icon.remove(), { once: true });
-
-    badge.appendChild(letter);
-    badge.appendChild(icon);
-
-    const label = document.createElement('span');
-    label.className = 'shortcut__label';
-    label.textContent = shortcut.title;
-
-    body.appendChild(badge);
-    body.appendChild(label);
-    frame.appendChild(body);
-    el.appendChild(frame);
-    el.setAttribute('aria-label', `${shortcut.title} - ${shortcut.url}`);
-    return el;
-  };
-
-  const updateShortcutTile = (entry, shortcut, rect) => {
-    const { el } = entry;
-    el.style.left = `${rect.x}px`;
-    el.style.top = `${rect.y}px`;
-    el.style.width = `${rect.w}px`;
-    el.style.height = `${rect.h}px`;
-    el.dataset.url = shortcut.url;
-    el.dataset.label = shortcut.title;
-    el.setAttribute('aria-label', `${shortcut.title} - ${shortcut.url}`);
-    el.classList.remove('is-expanded');
-    el.setAttribute('role', 'link');
-    el.tabIndex = 0;
-
-    const label = el.querySelector('.shortcut__label');
-    if (label) label.textContent = shortcut.title;
-    const letter = el.querySelector('.shortcut__letter');
-    if (letter) letter.textContent = (shortcut.title || '?').trim().charAt(0).toUpperCase() || '?';
-    const icon = el.querySelector('.shortcut__icon');
-    if (icon) {
-      const src = faviconFor(shortcut);
-      if (icon.getAttribute('src') !== src) icon.src = src;
-    }
-  };
-
   const updateTile = (entry, col, row, slot, photoIndex, rect, isExpanded) => {
     const image = state.images[photoIndex] || state.images[0];
     const { el } = entry;
@@ -548,7 +414,6 @@
     el.dataset.col = String(col);
     el.dataset.row = String(row);
     el.dataset.slot = String(slot);
-    el.dataset.type = 'photo';
     el.dataset.index = String(photoIndex);
     el.dataset.src = image.src;
     el.dataset.label = image.label || '';
@@ -638,32 +503,20 @@
       for (let slot = 0; slot < SLOTS; slot += 1) {
         const key = `${col}:${row}:${slot}`;
         needed.add(key);
-        const shortcut = shortcutAt(col, row, slot);
         const photoIndex = photoAt(col, row, slot);
         const rect = toWorldRect(col, row, rects[slot]);
-        const expanded = !shortcut && isActiveBlock && state.active.slot === slot;
+        const expanded = isActiveBlock && state.active.slot === slot;
         let entry = state.tiles.get(key);
 
         if (!entry) {
-          const el = shortcut
-            ? createShortcutTile(col, row, slot, shortcut, rect)
-            : createTile(col, row, slot, photoIndex, rect);
-          entry = {
-            el,
-            col,
-            row,
-            slot,
-            type: shortcut ? 'shortcut' : 'photo',
-            photoIndex: shortcut ? -1 : photoIndex,
-          };
+          const el = createTile(col, row, slot, photoIndex, rect);
+          entry = { el, col, row, slot, photoIndex };
           state.tiles.set(key, entry);
           wall.appendChild(el);
-          if (shortcut) updateShortcutTile(entry, shortcut, rect);
-          else updateTile(entry, col, row, slot, photoIndex, rect, expanded);
+          updateTile(entry, col, row, slot, photoIndex, rect, expanded);
           built += 1;
         } else if (layoutDirty) {
-          if (entry.type === 'shortcut' && shortcut) updateShortcutTile(entry, shortcut, rect);
-          else if (entry.type === 'photo') updateTile(entry, col, row, slot, photoIndex, rect, expanded);
+          updateTile(entry, col, row, slot, photoIndex, rect, expanded);
         }
       }
     }
@@ -689,12 +542,8 @@
   const render = (options = {}) => {
     const images = Array.isArray(options.images) ? options.images.filter((i) => i && i.src) : [];
     state.images = images;
-    state.shortcuts = Array.isArray(options.shortcuts)
-      ? options.shortcuts.filter((item) => item && item.url && item.title)
-      : [];
     state.seed = Math.round(options.seed ?? 1);
     if (Number.isFinite(options.scale)) state.cam.scale = options.scale;
-    shortcutSlotCache.clear();
     state.focusPoints.clear();
     state.pendingFocus.clear();
 
@@ -707,10 +556,7 @@
 
     // open on a random card of the first block, expanded, like Lattice centring the playing song
     const rng = mulberry32(hash(state.seed, 1, 2, 3));
-    const taken = shortcutSlotsFor(0, 0);
-    const photoSlots = [];
-    for (let i = 0; i < SLOTS; i += 1) if (!taken.includes(i)) photoSlots.push(i);
-    const slot = photoSlots[Math.floor(rng() * photoSlots.length)] ?? 0;
+    const slot = Math.floor(rng() * SLOTS);
     state.active = { col: 0, row: 0, slot };
 
     sync();
@@ -718,8 +564,7 @@
   };
 
   const expandTile = (el) => {
-    if (!el || el.dataset.type === 'shortcut') return null;
-    if (el.classList.contains('is-expanded')) {
+    if (!el || el.classList.contains('is-expanded')) {
       state.active = null;
       sync();
       return null;
