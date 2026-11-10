@@ -25,6 +25,7 @@ expansion that re-gears only the block you clicked. English / 中文.
 | 8 | 6×6 expansion with local block reflow | ✅ |
 | 9 | Glow / inner stroke, smart framing | ✅ |
 | 10 | Shortcut row from most-visited sites | ✅ |
+| 11 | White wall background and shortcut editing | ✅ |
 
 ## Features
 
@@ -52,6 +53,11 @@ expansion that re-gears only the block you clicked. English / 中文.
   page: the favicon on a white tile with the site name underneath. Entries come
   from Chrome's most-visited sites (`topSites`) and fall back to a built-in list
   (Gmail, YouTube, GitHub, Notion, Wikipedia, …). Clicking one opens the site.
+  The pencil at the end of the row enters edit mode: add, rename, re-point or
+  delete any shortcut; the list is stored in `chrome.storage.local`.
+- **Light wall** — the backing of the wall (and the placeholder of cards while
+  photos decode) is a soft white (`#f1f3f4`), so loading and empty edges read
+  bright rather than black.
 - **Three sources**
   - **Upload** — drop or pick images; downscaled to 1800 px, re-encoded to WebP
     and stored in IndexedDB. Nothing leaves the device.

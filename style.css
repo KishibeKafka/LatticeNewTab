@@ -121,7 +121,7 @@ svg {
   inset: 0;
   z-index: 0;
   overflow: hidden;
-  background: #0d0e12;
+  background: #f1f3f4;
   cursor: grab;
   touch-action: none;
   filter: blur(var(--bg-blur)) saturate(1.02);
@@ -139,7 +139,7 @@ svg {
   position: absolute;
   margin: 0;
   border-radius: 0;
-  background: #16171c;
+  background: #f1f3f4;
   cursor: pointer;
   transition:
     left 0.55s var(--ease-emphasized),
@@ -170,7 +170,7 @@ body.is-panning .tile {
 
 .tile.is-expanded .tile__frame {
   box-shadow:
-    inset 0 0 0 3px rgba(255, 255, 255, 0.95),
+    inset 0 0 0 3px var(--blue),
     inset 0 0 34px -6px rgba(246, 201, 166, 0.65);
 }
 
@@ -178,7 +178,7 @@ body.is-panning .tile {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background: #16171c;
+  background: #f1f3f4;
 }
 
 .tile__img {
@@ -237,7 +237,7 @@ body.is-panning .tile {
 .atmosphere__vignette {
   position: absolute;
   inset: 0;
-  background: radial-gradient(130% 110% at 50% 45%, transparent 55%, rgba(24, 26, 33, 0.18) 100%);
+  background: radial-gradient(130% 110% at 50% 45%, transparent 60%, rgba(32, 33, 36, 0.1) 100%);
 }
 
 /* ── Shortcuts row ─────────────────────────────────────────────────────── */
@@ -251,8 +251,8 @@ body.is-panning .tile {
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: center;
-  gap: clamp(10px, 1.5vw, 20px);
-  width: min(960px, calc(100vw - 36px));
+  gap: clamp(8px, 1.2vw, 18px);
+  width: min(1080px, calc(100vw - 36px));
   transform: translateX(-50%);
   pointer-events: auto;
 }
@@ -261,13 +261,21 @@ body.is-panning .tile {
   display: none;
 }
 
+.shortcut-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 72px;
+}
+
 .shortcut {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  width: 72px;
-  color: #fff;
+  width: 100%;
+  color: var(--ink-2);
 }
 
 .shortcut__tile {
@@ -278,10 +286,11 @@ body.is-panning .tile {
   height: 50px;
   border-radius: 12px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.95);
+  background: #ffffff;
+  border: 1px solid rgba(60, 64, 67, 0.1);
   box-shadow:
-    0 6px 18px rgba(0, 0, 0, 0.35),
-    0 1px 2px rgba(0, 0, 0, 0.2);
+    0 6px 18px rgba(60, 64, 67, 0.22),
+    0 1px 2px rgba(60, 64, 67, 0.12);
   transition:
     transform 0.2s var(--ease-standard),
     box-shadow 0.2s var(--ease-standard);
@@ -312,14 +321,16 @@ body.is-panning .tile {
   white-space: nowrap;
   font-size: 12px;
   line-height: 1.2;
-  color: #fff;
+  color: var(--ink-2);
   opacity: 0.95;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65);
+  text-shadow:
+    0 1px 2px rgba(255, 255, 255, 0.9),
+    0 0 10px rgba(255, 255, 255, 0.7);
 }
 
 .shortcut:hover .shortcut__tile {
   transform: translateY(-2px);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 10px 24px rgba(60, 64, 67, 0.28);
 }
 
 .shortcut:active .shortcut__tile {
@@ -336,6 +347,106 @@ body.is-panning .tile {
     0 0 0 5px var(--blue);
 }
 
+.shortcut--action .shortcut__tile {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px dashed rgba(60, 64, 67, 0.34);
+  color: var(--ink-2);
+}
+
+.shortcut--action .shortcut__tile svg {
+  width: 22px;
+  height: 22px;
+}
+
+.shortcut--action:hover .shortcut__tile {
+  background: #fff;
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.shortcut__remove {
+  position: absolute;
+  top: -6px;
+  right: 6px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #202124;
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+.shortcut__remove svg {
+  width: 10px;
+  height: 10px;
+}
+
+.shortcut__remove:hover {
+  background: var(--red);
+}
+
+/* shortcut editor dialog */
+.shortcut-dialog {
+  border: 0;
+  padding: 0;
+  width: min(400px, calc(100vw - 32px));
+  border-radius: 16px;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 24px 64px rgba(32, 33, 36, 0.35);
+}
+
+.shortcut-dialog::backdrop {
+  background: rgba(32, 33, 36, 0.32);
+  backdrop-filter: blur(3px);
+}
+
+.shortcut-dialog__form {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  padding: 22px;
+}
+
+.shortcut-dialog__title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.shortcut-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.shortcut-dialog__field .text-input {
+  width: 100%;
+  height: 40px;
+}
+
+.shortcut-dialog__error {
+  color: #c5221f;
+  font-size: 12px;
+}
+
+.shortcut-dialog__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.shortcut-dialog__spacer {
+  flex: 1;
+}
+
 @media (max-width: 640px) {
   .shortcuts {
     gap: 10px;
@@ -343,8 +454,12 @@ body.is-panning .tile {
     width: calc(100vw - 24px);
   }
 
-  .shortcut {
+  .shortcut-wrap {
     width: 62px;
+  }
+
+  .shortcut {
+    width: 100%;
     gap: 6px;
   }
 

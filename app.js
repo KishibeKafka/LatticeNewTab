@@ -35,6 +35,9 @@
   let settings = { ...DEFAULTS };
   let wallSeed = Math.floor(Math.random() * 1e6);
   let shortcutsList = [];
+  let shortcutsCustom = false;
+  let shortcutsEditing = false;
+  let editingShortcutIndex = -1;
   let toastTimer = 0;
   let appliedLanguage = null;
 
@@ -244,6 +247,19 @@
   /* ----------------------------- shortcuts -------------------------------- */
 
   const shortcutsEl = $('shortcuts');
+  const shortcutDialog = $('shortcut-dialog');
+  const shortcutForm = $('shortcut-form');
+  const shortcutName = $('shortcut-name');
+  const shortcutUrl = $('shortcut-url');
+  const shortcutError = $('shortcut-error');
+  const shortcutDelete = $('shortcut-delete');
+  const SHORTCUTS_KEY = 'lattice:shortcuts';
+  const MAX_SHORTCUTS = 12;
+
+  const ICON_EDIT = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4.2L19 9.2a1.9 1.9 0 0 0 0-2.7l-1.5-1.5a1.9 1.9 0 0 0-2.7 0L4 15.8V20Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m13.9 6.6 3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>`;
+  const ICON_DONE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const ICON_PLUS = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>`;
+  const ICON_X = `<svg viewBox="0 0 12 12" aria-hidden="true"><path d="m3 3 6 6M9 3 3 9" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`;
 
   const faviconFor = (url) => {
     try {
@@ -261,50 +277,218 @@
     }
   };
 
+  const hostOf = (url) => {
+    try {
+      return new URL(url).hostname.replace(/^www\./, '');
+    } catch (err) {
+      return '';
+    }
+  };
+
+  const sanitizeShortcuts = (list) => {
+    if (!Array.isArray(list)) return [];
+    const seen = new Set();
+    const clean = [];
+    for (const item of list) {
+      if (!item || typeof item.url !== 'string') continue;
+      if (!/^https?:\/\//i.test(item.url)) continue;
+      if (seen.has(item.url)) continue;
+      seen.add(item.url);
+      clean.push({
+        title: String(item.title || hostOf(item.url) || item.url).slice(0, 60),
+        url: item.url,
+      });
+      if (clean.length >= MAX_SHORTCUTS) break;
+    }
+    return clean;
+  };
+
+  const persistShortcuts = async () => {
+    shortcutsCustom = true;
+    await store.set(SHORTCUTS_KEY, shortcutsList);
+  };
+
   const openShortcut = (url) => {
     if (!url || !/^https?:\/\//i.test(url)) return;
     window.location.href = url;
   };
 
+  const normaliseUrl = (value) => {
+    let candidate = String(value || '').trim();
+    if (!candidate) return null;
+    if (!/^https?:\/\//i.test(candidate)) candidate = `https://${candidate}`;
+    try {
+      const parsed = new URL(candidate);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+      return parsed.href;
+    } catch (err) {
+      return null;
+    }
+  };
+
+  const makeShortcutButton = (site, index) => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'shortcut-wrap';
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'shortcut';
+    button.title = site.title;
+    button.setAttribute('aria-label', site.title);
+
+    const tile = document.createElement('span');
+    tile.className = 'shortcut__tile';
+
+    const letter = document.createElement('span');
+    letter.className = 'shortcut__letter';
+    letter.textContent = (site.title || '?').trim().charAt(0).toUpperCase() || '?';
+
+    const icon = document.createElement('img');
+    icon.className = 'shortcut__icon';
+    icon.alt = '';
+    icon.decoding = 'async';
+    icon.src = faviconFor(site.url);
+    icon.addEventListener('error', () => icon.remove(), { once: true });
+
+    tile.appendChild(letter);
+    tile.appendChild(icon);
+
+    const label = document.createElement('span');
+    label.className = 'shortcut__label';
+    label.textContent = site.title;
+
+    button.appendChild(tile);
+    button.appendChild(label);
+    button.addEventListener('click', () => {
+      if (shortcutsEditing) openShortcutDialog(index);
+      else openShortcut(site.url);
+    });
+
+    wrapper.appendChild(button);
+
+    if (shortcutsEditing) {
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'shortcut__remove';
+      remove.setAttribute('aria-label', t('shortcuts.remove', { name: site.title }));
+      remove.innerHTML = ICON_X;
+      remove.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        shortcutsList.splice(index, 1);
+        await persistShortcuts();
+        renderShortcuts();
+      });
+      wrapper.appendChild(remove);
+    }
+
+    return wrapper;
+  };
+
+  const makeActionButton = ({ label, icon, onClick, className = '' }) => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'shortcut-wrap';
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `shortcut shortcut--action ${className}`.trim();
+    button.setAttribute('aria-label', label);
+    button.title = label;
+
+    const tile = document.createElement('span');
+    tile.className = 'shortcut__tile';
+    tile.innerHTML = icon;
+
+    const text = document.createElement('span');
+    text.className = 'shortcut__label';
+    text.textContent = label;
+
+    button.appendChild(tile);
+    button.appendChild(text);
+    button.addEventListener('click', onClick);
+    wrapper.appendChild(button);
+    return wrapper;
+  };
+
   const renderShortcuts = () => {
     if (!shortcutsEl) return;
-    shortcutsEl.replaceChildren(
-      ...shortcutsList.map((site) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'shortcut';
-        button.title = site.title;
-        button.setAttribute('aria-label', site.title);
 
-        const tile = document.createElement('span');
-        tile.className = 'shortcut__tile';
+    const items = shortcutsList.map((site, index) => makeShortcutButton(site, index));
 
-        const letter = document.createElement('span');
-        letter.className = 'shortcut__letter';
-        letter.textContent = (site.title || '?').trim().charAt(0).toUpperCase() || '?';
+    if (shortcutsEditing && shortcutsList.length < MAX_SHORTCUTS) {
+      items.push(
+        makeActionButton({
+          label: t('shortcuts.add'),
+          icon: ICON_PLUS,
+          onClick: () => openShortcutDialog(-1),
+        })
+      );
+    }
 
-        const icon = document.createElement('img');
-        icon.className = 'shortcut__icon';
-        icon.alt = '';
-        icon.decoding = 'async';
-        icon.src = faviconFor(site.url);
-        icon.addEventListener('error', () => icon.remove(), { once: true });
-
-        tile.appendChild(letter);
-        tile.appendChild(icon);
-
-        const label = document.createElement('span');
-        label.className = 'shortcut__label';
-        label.textContent = site.title;
-
-        button.appendChild(tile);
-        button.appendChild(label);
-        button.addEventListener('click', () => openShortcut(site.url));
-        return button;
+    items.push(
+      makeActionButton({
+        label: shortcutsEditing ? t('shortcuts.done') : t('shortcuts.edit'),
+        icon: shortcutsEditing ? ICON_DONE : ICON_EDIT,
+        onClick: toggleShortcutEditing,
       })
     );
-    shortcutsEl.hidden = shortcutsList.length === 0;
+
+    shortcutsEl.replaceChildren(...items);
+    shortcutsEl.hidden = false;
   };
+
+  const toggleShortcutEditing = () => {
+    shortcutsEditing = !shortcutsEditing;
+    renderShortcuts();
+  };
+
+  const openShortcutDialog = (index) => {
+    if (!shortcutDialog) return;
+    editingShortcutIndex = index;
+    const site = index >= 0 ? shortcutsList[index] : null;
+    const title = $('shortcut-dialog-title');
+    if (title) title.textContent = t(site ? 'shortcuts.editTitle' : 'shortcuts.newTitle');
+    if (shortcutName) shortcutName.value = site ? site.title : '';
+    if (shortcutUrl) shortcutUrl.value = site ? site.url : '';
+    if (shortcutError) shortcutError.hidden = true;
+    if (shortcutDelete) shortcutDelete.hidden = !site;
+    shortcutDialog.showModal();
+    shortcutName?.focus();
+  };
+
+  shortcutForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const url = normaliseUrl(shortcutUrl?.value);
+    if (!url) {
+      if (shortcutError) shortcutError.hidden = false;
+      shortcutUrl?.focus();
+      return;
+    }
+    const title = (shortcutName?.value || '').trim() || hostOf(url) || url;
+    const entry = { title: title.slice(0, 60), url };
+
+    if (editingShortcutIndex >= 0) shortcutsList[editingShortcutIndex] = entry;
+    else if (shortcutsList.length < MAX_SHORTCUTS) shortcutsList.push(entry);
+
+    await persistShortcuts();
+    shortcutDialog.close();
+    renderShortcuts();
+  });
+
+  shortcutDelete?.addEventListener('click', async () => {
+    if (editingShortcutIndex < 0) return;
+    shortcutsList.splice(editingShortcutIndex, 1);
+    await persistShortcuts();
+    shortcutDialog.close();
+    renderShortcuts();
+  });
+
+  $('shortcut-cancel')?.addEventListener('click', () => shortcutDialog?.close());
+  shortcutDialog?.addEventListener('click', (event) => {
+    if (event.target === shortcutDialog) shortcutDialog.close();
+  });
+  shortcutDialog?.addEventListener('close', () => {
+    editingShortcutIndex = -1;
+  });
 
   /* ------------------------------- wall ---------------------------------- */
 
@@ -543,6 +727,7 @@
     const languageChanged = syncControls();
     if (languageChanged) {
       refreshLibraryUI();
+      renderShortcuts();
       renderWall();
     }
     if (options.save !== false) persist(options.immediateSave);
@@ -803,12 +988,14 @@
 
   const boot = async () => {
     try {
-      const [saved, , shortcuts] = await Promise.all([
+      const [saved, , stored, dynamic] = await Promise.all([
         store.get(SETTINGS_KEY),
         library.load(),
+        store.get(SHORTCUTS_KEY),
         window.LatticeShortcuts ? window.LatticeShortcuts.load() : Promise.resolve([]),
       ]);
-      shortcutsList = shortcuts || [];
+      shortcutsCustom = Array.isArray(stored);
+      shortcutsList = sanitizeShortcuts(shortcutsCustom ? stored : dynamic);
       settings = sanitize(saved);
       if (settings.source === 'library' && library.counts().total === 0) {
         settings.source = 'curated';

@@ -152,6 +152,31 @@
       </footer>
     </aside>
 
+    <dialog class="shortcut-dialog" id="shortcut-dialog">
+      <form class="shortcut-dialog__form" id="shortcut-form">
+        <h2 class="shortcut-dialog__title" id="shortcut-dialog-title" data-i18n="shortcuts.newTitle">New shortcut</h2>
+
+        <label class="shortcut-dialog__field">
+          <span data-i18n="shortcuts.name">Name</span>
+          <input class="text-input" id="shortcut-name" maxlength="60" autocomplete="off" />
+        </label>
+
+        <label class="shortcut-dialog__field">
+          <span data-i18n="shortcuts.url">URL</span>
+          <input class="text-input" id="shortcut-url" type="text" inputmode="url" autocomplete="off" placeholder="https://example.com" />
+        </label>
+
+        <p class="shortcut-dialog__error" id="shortcut-error" data-i18n="shortcuts.invalidUrl" hidden>Enter a valid URL</p>
+
+        <div class="shortcut-dialog__actions">
+          <button class="text-btn" id="shortcut-delete" type="button" data-i18n="shortcuts.delete" hidden>Delete</button>
+          <span class="shortcut-dialog__spacer"></span>
+          <button class="btn" id="shortcut-cancel" type="button" data-i18n="shortcuts.cancel">Cancel</button>
+          <button class="btn btn--filled" id="shortcut-save" type="submit" data-i18n="shortcuts.save">Save</button>
+        </div>
+      </form>
+    </dialog>
+
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
     <script src="i18n.js" defer></script>
