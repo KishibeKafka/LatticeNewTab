@@ -118,22 +118,23 @@
   /* ------------------------------ camera --------------------------------- */
 
   const collageEl = $('collage');
-  const camera = { x: 0, y: 0, z: 1 };
+  const camera = { x: 0, y: 0 };
 
   let camFrame = 0;
   let focusActive = false;
   let camClosing = false;
   let prevCamera = null;
+  let focusedTile = null;
 
   let velocity = { x: 0, y: 0 };
   let drag = null;
   let panFrame = 0;
 
-  const applyCamera = () => engine.setCamera(camera.x, camera.y, camera.z);
+  const applyCamera = () => engine.setCamera(camera.x, camera.y);
 
   const animateCamera = (target, duration, done) => {
     cancelAnimationFrame(camFrame);
-    const from = { x: camera.x, y: camera.y, z: camera.z };
+    const from = { x: camera.x, y: camera.y };
     const start = performance.now();
 
     const step = (now) => {
@@ -141,7 +142,6 @@
       const eased = 1 - Math.pow(1 - progress, 5);
       camera.x = from.x + (target.x - from.x) * eased;
       camera.y = from.y + (target.y - from.y) * eased;
-      camera.z = from.z + (target.z - from.z) * eased;
       applyCamera();
       if (progress < 1) camFrame = requestAnimationFrame(step);
       else if (done) done();
@@ -155,7 +155,6 @@
     cancelAnimationFrame(panFrame);
     camera.x = 0;
     camera.y = 0;
-    camera.z = 1;
     velocity = { x: 0, y: 0 };
     focusActive = false;
     camClosing = false;
@@ -259,33 +258,42 @@
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    // zoom so the photo fills a comfortable share of the viewport
-    const zoom = clamp(Math.min((vw * 0.62) / width, (vh * 0.72) / height), 1.15, 3);
+    // the photo itself grows; the camera only translates to centre it
+    const zoom = clamp(Math.min((vw * 0.64) / width, (vh * 0.74) / height), 1.2, 3.5);
 
-    prevCamera = { x: camera.x, y: camera.y, z: camera.z };
+    prevCamera = { x: camera.x, y: camera.y };
+    focusedTile = tile;
     focusActive = true;
     cancelAnimationFrame(panFrame);
     document.body.classList.add('has-focus');
 
-    animateCamera(
-      { x: vw / 2 - centerX * zoom, y: vh / 2 - centerY * zoom, z: zoom },
-      660
-    );
+    tile.classList.add('is-focused');
+    tile.style.setProperty('--zoom', String(zoom.toFixed(4)));
+
+    animateCamera({ x: vw / 2 - centerX, y: vh / 2 - centerY }, 620);
+  };
+
+  const restoreFocusedTile = () => {
+    if (!focusedTile) return;
+    focusedTile.classList.remove('is-focused');
+    focusedTile.style.removeProperty('--zoom');
+    focusedTile = null;
   };
 
   const closeFocus = () => {
     if (!focusActive || camClosing) return;
     camClosing = true;
-    const target = prevCamera || { x: 0, y: 0, z: 1 };
+    const target = prevCamera || { x: 0, y: 0 };
+
+    restoreFocusedTile();
+    document.body.classList.remove('has-focus');
 
     animateCamera(target, 560, () => {
       camera.x = target.x;
       camera.y = target.y;
-      camera.z = target.z;
       focusActive = false;
       camClosing = false;
-      document.body.classList.remove('has-focus');
-      engine.setCamera(camera.x, camera.y, 1);
+      engine.setCamera(camera.x, camera.y);
     });
   };
 
@@ -305,14 +313,14 @@
     focusResize = setTimeout(() => {
       if (!focusActive) return;
       cancelAnimationFrame(camFrame);
-      const target = prevCamera || { x: 0, y: 0, z: 1 };
+      const target = prevCamera || { x: 0, y: 0 };
       camera.x = target.x;
       camera.y = target.y;
-      camera.z = 1;
       focusActive = false;
       camClosing = false;
+      restoreFocusedTile();
       document.body.classList.remove('has-focus');
-      engine.setCamera(camera.x, camera.y, 1);
+      engine.setCamera(camera.x, camera.y);
     }, 120);
   });
 

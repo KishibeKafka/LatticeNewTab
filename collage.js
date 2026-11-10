@@ -1,17 +1,17 @@
 /**
- * collage.js — endless masonry of non-overlapping photos.
+ * collage.js — endless, gap-free masonry.
  *
- * The plane is split into columns of a fixed pitch. Inside a column photos are
- * stacked edge-to-edge (with a gap) at their natural aspect ratio, repeating
- * with a per-column period so the wall can continue forever in both axes.
- * Columns use different widths, horizontal insets and vertical phases, so no
- * rows or seams line up and nothing ever covers anything else.
+ * The plane is tiled by columns whose widths vary within a repeating cycle.
+ * Inside a column photos are stacked with no gaps at their natural aspect
+ * ratio, and columns are flush against each other — every pixel is covered and
+ * no photo ever overlaps another. Corners are square.
  *
- * Only the columns/items near the viewport are kept in the DOM.
+ * Columns repeat with a per-column vertical period, so the wall is endless in
+ * both axes while only the columns near the viewport stay in the DOM.
  *
  * Public API (window.LatticeCollage):
  *   render({ images, seed }) -> visible tile count
- *   setCamera(x, y, z)
+ *   setCamera(x, y)
  *   tileCount()
  */
 (() => {
@@ -20,7 +20,7 @@
   const wall = document.getElementById('collage-wall');
   const collage = document.getElementById('collage');
 
-  const GAP = 12;
+  const CYCLE = 8; // columns per horizontal cycle
   const ITEMS_PER_PERIOD = 7;
 
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -42,8 +42,11 @@
   const state = {
     images: [],
     seed: 1,
-    pitch: 320,
-    cam: { x: 0, y: 0, z: 1 },
+    cam: { x: 0, y: 0 },
+    widths: [],
+    prefix: [],
+    periodWidth: 1,
+    baseWidth: 320,
   };
 
   /** key "column:period:index" -> tile */
@@ -54,19 +57,55 @@
   let updateFrame = 0;
   let lastRange = '';
 
-  const computePitch = () => clamp(Math.round(window.innerWidth / 4.4), 210, 430);
+  const buildWidths = () => {
+    const base = clamp(Math.round(window.innerWidth / 4.6), 200, 380);
+    const rand = mulberry32(hashCell(0, 991, state.seed));
+
+    const widths = [];
+    let total = 0;
+    for (let i = 0; i < CYCLE; i += 1) {
+      const width = Math.max(160, Math.round(base * (0.68 + rand() * 0.72)));
+      widths.push(width);
+      total += width;
+    }
+
+    const prefix = [];
+    let cursor = 0;
+    for (let i = 0; i < CYCLE; i += 1) {
+      prefix.push(cursor);
+      cursor += widths[i];
+    }
+
+    state.baseWidth = base;
+    state.widths = widths;
+    state.prefix = prefix;
+    state.periodWidth = total;
+  };
+
+  const columnAtX = (x) => {
+    const cycle = Math.floor(x / state.periodWidth);
+    const local = x - cycle * state.periodWidth;
+    let pos = 0;
+    while (pos < CYCLE - 1 && local >= state.prefix[pos + 1]) pos += 1;
+    return cycle * CYCLE + pos;
+  };
+
+  const columnOrigin = (index) => {
+    const cycle = Math.floor(index / CYCLE);
+    const pos = ((index % CYCLE) + CYCLE) % CYCLE;
+    return {
+      pos,
+      x: cycle * state.periodWidth + state.prefix[pos],
+      width: state.widths[pos],
+    };
+  };
 
   const getColumn = (index) => {
     const cached = columns.get(index);
     if (cached) return cached;
 
+    const { pos, x, width } = columnOrigin(index);
     const rand = mulberry32(hashCell(index, 0, state.seed));
-    const pitch = state.pitch;
-    const available = Math.max(140, pitch - GAP);
-    const columnWidth = available * (0.84 + rand() * 0.16);
-    const slack = Math.max(0, pitch - GAP - columnWidth);
-    const baseX = GAP * 0.5 + slack * rand() * 0.5;
-
     const items = [];
     let cursor = 0;
 
@@ -76,31 +115,24 @@
       if (!image) continue;
 
       const aspect = clamp(image.h ? image.w / image.h : 1, 0.6, 1.8);
-      // width varies a little inside the column, height keeps the photo's
-      // natural aspect so the whole image is visible (no cropping)
-      const width = columnWidth * (0.95 + itemRand() * 0.05);
-      const height = width / aspect;
-      const x = baseX + (columnWidth - width) * itemRand();
-      const gap = GAP * (0.9 + itemRand() * 0.5);
+      const height = Math.max(80, Math.round(width / aspect));
 
       items.push({
         image,
-        aspect,
-        x,
+        offsetY: cursor,
         width,
         height,
-        gap,
-        offsetY: cursor,
         hue: Math.round(itemRand() * 360),
+        aspect,
       });
 
-      cursor += height + gap;
+      cursor += height;
     }
 
     const height = Math.max(1, cursor);
-    const phase = height * (0.1 + rand() * 0.8);
+    const phase = Math.round(rand() * height);
 
-    const column = { x: index * pitch, items, height, phase };
+    const column = { x, width, pos, items, height, phase };
     columns.set(index, column);
     return column;
   };
@@ -115,10 +147,10 @@
     tile.dataset.label = image.label || '';
     tile.dataset.w = String(image.w || '');
     tile.dataset.h = String(image.h || '');
-    tile.style.left = `${rect.x.toFixed(1)}px`;
-    tile.style.top = `${rect.y.toFixed(1)}px`;
-    tile.style.width = `${rect.w.toFixed(1)}px`;
-    tile.style.height = `${rect.h.toFixed(1)}px`;
+    tile.style.left = `${rect.x}px`;
+    tile.style.top = `${rect.y}px`;
+    tile.style.width = `${rect.w}px`;
+    tile.style.height = `${rect.h}px`;
     tile.style.setProperty('--hue', String(hue));
 
     const frame = document.createElement('div');
@@ -140,30 +172,27 @@
   };
 
   const update = () => {
-    if (state.cam.z > 1.001) return; // camera is zoomed in: keep the current set
-
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const pitch = state.pitch;
 
     const left = -state.cam.x;
     const top = -state.cam.y;
     const right = left + vw;
     const bottom = top + vh;
 
-    const marginX = pitch * 0.35;
-    const marginY = 240;
+    const marginX = 180;
+    const marginY = 220;
 
-    const minIndex = Math.floor((left - marginX) / pitch);
-    const maxIndex = Math.floor((right + marginX) / pitch);
+    const first = columnAtX(left - marginX) - 1;
+    const last = columnAtX(right + marginX) + 1;
 
-    const range = `${minIndex}:${maxIndex}:${Math.round(top)}:${Math.round(bottom)}`;
+    const range = `${first}:${last}:${Math.round(top)}:${Math.round(bottom)}`;
     if (range === lastRange) return;
     lastRange = range;
 
     const alive = new Set();
 
-    for (let index = minIndex; index <= maxIndex; index += 1) {
+    for (let index = first; index <= last; index += 1) {
       const column = getColumn(index);
       if (!column.items.length) continue;
 
@@ -182,7 +211,7 @@
             const tile = createTile(
               item.image,
               {
-                x: column.x + item.x,
+                x: column.x,
                 y: column.phase + period * column.height + item.offsetY,
                 w: item.width,
                 h: item.height,
@@ -216,7 +245,7 @@
 
     state.images = images;
     state.seed = Math.round(options.seed ?? 1);
-    state.pitch = computePitch();
+    buildWidths();
 
     for (const tile of tiles.values()) tile.remove();
     tiles.clear();
@@ -230,27 +259,25 @@
     return tiles.size;
   };
 
-  const setCamera = (x, y, z) => {
-    state.cam = { x, y, z };
-    if (wall) {
-      wall.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) scale(${z.toFixed(4)})`;
-    }
-    if (z <= 1.001) scheduleUpdate();
+  const setCamera = (x, y) => {
+    state.cam = { x, y };
+    if (wall) wall.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0)`;
+    scheduleUpdate();
   };
 
   const refreshLayout = () => {
-    const pitch = computePitch();
-    if (pitch === state.pitch) {
+    const base = clamp(Math.round(window.innerWidth / 4.6), 200, 380);
+    if (base === state.baseWidth) {
       lastRange = '';
-      if (state.cam.z <= 1.001) scheduleUpdate();
+      scheduleUpdate();
       return;
     }
-    state.pitch = pitch;
+    buildWidths();
     for (const tile of tiles.values()) tile.remove();
     tiles.clear();
     columns.clear();
     lastRange = '';
-    if (state.cam.z <= 1.001) update();
+    update();
   };
 
   let resizeFrame = 0;

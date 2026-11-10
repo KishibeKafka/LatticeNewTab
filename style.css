@@ -36,7 +36,7 @@
   --shadow-sheet: 0 16px 48px rgba(32, 33, 36, 0.3);
 
   /* user-tunable (written by app.js) */
-  --tile-radius: 12px;
+  --tile-radius: 0px;
   --bg-blur: 0px;
   --dim: 0;
   --grain-opacity: 0;
@@ -139,9 +139,23 @@ svg {
   position: absolute;
   margin: 0;
   border-radius: var(--tile-radius);
-  contain: layout paint style;
   cursor: zoom-in;
-  transition: opacity 0.35s var(--ease-standard);
+  transform: scale(var(--zoom, 1));
+  transform-origin: 50% 50%;
+  transition:
+    transform 0.55s var(--ease-emphasized),
+    opacity 0.35s var(--ease-standard);
+}
+
+.tile.is-focused {
+  z-index: 5000;
+  cursor: zoom-out;
+}
+
+.tile.is-focused .tile__frame {
+  box-shadow:
+    0 40px 90px rgba(16, 17, 22, 0.45),
+    0 8px 24px rgba(16, 17, 22, 0.35);
 }
 
 .tile:focus-visible {
@@ -149,15 +163,7 @@ svg {
 }
 
 .tile:focus-visible .tile__frame {
-  box-shadow:
-    0 0 0 3px #fff,
-    0 0 0 6px var(--blue);
-}
-
-.tile:hover .tile__frame {
-  box-shadow:
-    0 16px 34px -14px rgba(32, 33, 36, 0.5),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.75);
+  box-shadow: inset 0 0 0 3px var(--blue);
 }
 
 body.is-panning .collage,
@@ -180,10 +186,6 @@ body.has-focus .tile {
     hsl(var(--hue, 210) 24% 86%),
     hsl(calc(var(--hue, 210) + 46) 30% 74%)
   );
-  box-shadow:
-    0 10px 24px -12px rgba(32, 33, 36, 0.45),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.5);
-  transition: box-shadow 0.25s var(--ease-standard);
 }
 
 .tile__img {
